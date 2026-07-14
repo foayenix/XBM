@@ -20,6 +20,20 @@ CREATE TABLE IF NOT EXISTS bookmarks (
 
 CREATE INDEX IF NOT EXISTS idx_bookmarks_created_at ON bookmarks(created_at);
 
+-- Single-row table holding the logged-in user's X OAuth 2.0 tokens.
+-- This file lives under db/ and is gitignored, same as the rest of the
+-- database, which meets the "at least gitignored" bar for local secrets.
+CREATE TABLE IF NOT EXISTS oauth_tokens (
+    id            INTEGER PRIMARY KEY CHECK (id = 1),
+    access_token  TEXT NOT NULL,
+    refresh_token TEXT,
+    expires_at    TEXT NOT NULL,
+    scope         TEXT,
+    user_id       TEXT,
+    username      TEXT,
+    updated_at    TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS linked_content (
     id                    INTEGER PRIMARY KEY AUTOINCREMENT,
     bookmark_id           INTEGER NOT NULL REFERENCES bookmarks(id) ON DELETE CASCADE,

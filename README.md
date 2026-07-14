@@ -83,6 +83,37 @@ python run.py
 
 Then open http://127.0.0.1:8000 in your browser.
 
+**Important:** the OAuth login flow redirects your browser back to
+`127.0.0.1`, so this only works when you run it directly on your own
+machine — not over SSH port forwarding or in a remote/cloud sandbox where
+`127.0.0.1` doesn't reach your browser.
+
+### 6. Log in to X and run your first sync
+
+1. With the server running, open http://127.0.0.1:8000/auth/login in your
+   browser and approve access.
+2. You'll land on `/api/auth/status`, which should show
+   `"logged_in": true` and your username.
+3. Trigger a sync:
+   ```bash
+   curl -X POST http://127.0.0.1:8000/api/sync
+   ```
+   This paginates through all your bookmarks, expands any self-authored
+   threads, and upserts everything into the local SQLite database. The
+   response reports how many bookmarks were new vs. already-known, plus
+   how many X API reads the sync used (bookmarks are billed per read —
+   see the cost note in step 2 above).
+4. Re-running the sync is safe — it's idempotent by tweet id and won't
+   create duplicates or re-bill for unchanged bookmarks reads beyond
+   what pagination requires.
+
+**Known limitation:** thread expansion walks *backward* from a bookmarked
+reply to reconstruct the thread up to that point, using the standard tweet
+lookup endpoint. It can't walk *forward* to later replies the author
+posted after the bookmarked tweet — that requires the recent-search
+endpoint, which sits behind a more restricted X API access tier and isn't
+used here to avoid scraping-adjacent workarounds.
+
 ## Project layout
 
 ```
@@ -97,7 +128,7 @@ run.py      Starts the whole app with one command
 
 - [x] Phase 1: Project scaffold
 - [x] Phase 2: Database schema (SQLite + FTS5)
-- [ ] Phase 3: X API sync engine (OAuth PKCE, pagination, thread expansion)
+- [x] Phase 3: X API sync engine (OAuth PKCE, pagination, thread expansion)
 - [ ] Phase 4: Enrichment pipeline (transcripts, article summaries, auto-tagging)
 - [ ] Phase 5: Local web UI (search, tag filters, watch-later queue)
 - [ ] Phase 6: Polish (error handling, logging, optional scheduled sync)
