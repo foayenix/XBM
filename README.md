@@ -96,7 +96,7 @@ run.py      Starts the whole app with one command
 ## Roadmap
 
 - [x] Phase 1: Project scaffold
-- [ ] Phase 2: Database schema (SQLite + FTS5)
+- [x] Phase 2: Database schema (SQLite + FTS5)
 - [ ] Phase 3: X API sync engine (OAuth PKCE, pagination, thread expansion)
 - [ ] Phase 4: Enrichment pipeline (transcripts, article summaries, auto-tagging)
 - [ ] Phase 5: Local web UI (search, tag filters, watch-later queue)
