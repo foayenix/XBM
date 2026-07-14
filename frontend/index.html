@@ -2,15 +2,46 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>XBM - X Bookmarks</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 4rem auto; color: #222; }
-    code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px; }
-  </style>
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <h1>XBM</h1>
-  <p>Scaffold is up. Search, tag filters, and the watch-later queue land in Phase 5.</p>
-  <p>Backend health check: <code>/api/health</code></p>
+  <header class="topbar">
+    <h1>XBM</h1>
+    <div class="topbar-actions">
+      <span id="sync-status" class="sync-status"></span>
+      <button id="sync-btn">Sync now</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="sidebar">
+      <button class="nav-item active" data-view="search" type="button">All bookmarks</button>
+      <button class="nav-item" data-view="watch-later" type="button">Watch later</button>
+      <h2>Tags</h2>
+      <ul id="tag-list" class="tag-list"></ul>
+    </nav>
+
+    <main>
+      <section id="search-view" class="view">
+        <input id="search-input" type="search" placeholder="Search bookmarks..." autocomplete="off" />
+        <div id="results" class="results"></div>
+        <p id="results-status" class="status-line"></p>
+      </section>
+
+      <section id="watch-later-view" class="view" hidden>
+        <div class="wl-filters">
+          <button class="wl-filter active" data-status="unwatched" type="button">Unwatched</button>
+          <button class="wl-filter" data-status="watched" type="button">Watched</button>
+          <button class="wl-filter" data-status="" type="button">All</button>
+        </div>
+        <div id="watch-later-results" class="results"></div>
+        <p id="watch-later-status" class="status-line"></p>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
 </body>
 </html>

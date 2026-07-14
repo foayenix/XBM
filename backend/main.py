@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend import config, x_auth
+from backend import config, db, queries, x_auth
 from backend.enrich import EnrichmentError, run_enrichment
 from backend.sync import sync_bookmarks
 from backend.x_auth import XAuthError
@@ -71,6 +71,45 @@ def api_enrich():
         return run_enrichment()
     except EnrichmentError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/search")
+def api_search(q: str | None = None, tag: list[str] = Query(default=[]), limit: int = 30, offset: int = 0):
+    conn = db.get_connection()
+    try:
+        return queries.search_bookmarks(conn, q, tag, limit, offset)
+    finally:
+        conn.close()
+
+
+@app.get("/api/tags")
+def api_tags():
+    conn = db.get_connection()
+    try:
+        return queries.list_tags(conn)
+    finally:
+        conn.close()
+
+
+@app.get("/api/watch-later")
+def api_watch_later(status: str | None = None):
+    conn = db.get_connection()
+    try:
+        return queries.list_watch_later(conn, status)
+    finally:
+        conn.close()
+
+
+@app.post("/api/watch-later/{bookmark_id}/toggle")
+def api_toggle_watch_later(bookmark_id: int):
+    conn = db.get_connection()
+    try:
+        result = queries.toggle_watch_later(conn, bookmark_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail="That bookmark isn't in the watch-later queue")
+        return result
+    finally:
+        conn.close()
 
 
 @app.get("/")

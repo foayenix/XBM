@@ -129,6 +129,19 @@ after a crash or a rate limit picks up where it left off instead of
 redoing finished work. It uses Claude Haiku (cheap, fast) and reports how
 many summarization/tagging calls it made, since those are billed too.
 
+### 8. Use the web UI
+
+With the server running, http://127.0.0.1:8000 gives you:
+
+- A search bar over the full-text index (tweet text, thread text, linked
+  article summaries/transcripts, and tags)
+- A tag sidebar — click a tag to filter, click again to clear it
+- A **Watch later** view listing every bookmark with a YouTube link
+  (added automatically during enrichment), with unwatched/watched/all
+  filters and a toggle per item
+- A **Sync now** button that runs a full sync followed by enrichment and
+  reports progress and final counts
+
 ## Project layout
 
 ```
@@ -145,5 +158,5 @@ run.py      Starts the whole app with one command
 - [x] Phase 2: Database schema (SQLite + FTS5)
 - [x] Phase 3: X API sync engine (OAuth PKCE, pagination, thread expansion)
 - [x] Phase 4: Enrichment pipeline (transcripts, article summaries, auto-tagging)
-- [ ] Phase 5: Local web UI (search, tag filters, watch-later queue)
+- [x] Phase 5: Local web UI (search, tag filters, watch-later queue)
 - [ ] Phase 6: Polish (error handling, logging, optional scheduled sync)

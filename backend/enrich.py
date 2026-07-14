@@ -11,7 +11,7 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse
 
 import httpx
 from anthropic import Anthropic
@@ -19,6 +19,7 @@ from readability import Document
 from youtube_transcript_api import YouTubeTranscriptApi
 
 from backend import config, db
+from backend.util import extract_youtube_video_id
 
 logger = logging.getLogger("xbm.enrich")
 
@@ -50,20 +51,6 @@ def classify_link(url: str) -> str | None:
     return None
 
 
-def _extract_youtube_video_id(url: str) -> str | None:
-    parsed = urlparse(url)
-    host = (parsed.hostname or "").lower()
-    if host == "youtu.be":
-        return parsed.path.lstrip("/") or None
-    if "youtube.com" in host:
-        if parsed.path == "/watch":
-            return parse_qs(parsed.query).get("v", [None])[0]
-        match = re.match(r"^/(shorts|embed|live)/([^/]+)", parsed.path)
-        if match:
-            return match.group(2)
-    return None
-
-
 def seed_linked_content(conn) -> int:
     """Ensure every external link on every bookmark has a linked_content row."""
     rows = conn.execute("SELECT id, external_links FROM bookmarks").fetchall()
@@ -84,7 +71,7 @@ def seed_linked_content(conn) -> int:
 
 
 def _fetch_youtube_transcript(url: str) -> tuple[str, str | None]:
-    video_id = _extract_youtube_video_id(url)
+    video_id = extract_youtube_video_id(url)
     if not video_id:
         raise EnrichmentError(f"Could not parse a YouTube video id out of {url}")
 
@@ -152,6 +139,10 @@ def process_linked_content(conn) -> dict:
                 conn.execute(
                     "UPDATE linked_content SET transcript_or_summary=?, title=?, status='done', error=NULL, fetched_at=? WHERE id=?",
                     (transcript, title, now, row["id"]),
+                )
+                conn.execute(
+                    "INSERT OR IGNORE INTO watch_later (bookmark_id, status, added_at) VALUES (?, 'unwatched', ?)",
+                    (row["bookmark_id"], now),
                 )
             else:  # article
                 resp = httpx.get(row["url"], headers=HTTP_HEADERS, timeout=20.0, follow_redirects=True)
