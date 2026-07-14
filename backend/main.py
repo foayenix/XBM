@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend import config, x_auth
+from backend.enrich import EnrichmentError, run_enrichment
 from backend.sync import sync_bookmarks
 from backend.x_auth import XAuthError
 from backend.x_client import XApiError
@@ -61,6 +62,14 @@ def api_sync():
     try:
         return sync_bookmarks()
     except (XAuthError, XApiError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/enrich")
+def api_enrich():
+    try:
+        return run_enrichment()
+    except EnrichmentError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 

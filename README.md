@@ -114,6 +114,21 @@ posted after the bookmarked tweet — that requires the recent-search
 endpoint, which sits behind a more restricted X API access tier and isn't
 used here to avoid scraping-adjacent workarounds.
 
+### 7. Run enrichment
+
+After a sync, run the enrichment pipeline to fetch YouTube transcripts,
+summarize linked articles, and auto-tag every bookmark:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/enrich
+```
+
+This is resumable: it only processes linked-content items that aren't yet
+`done` and only tags bookmarks that don't have tags yet, so re-running
+after a crash or a rate limit picks up where it left off instead of
+redoing finished work. It uses Claude Haiku (cheap, fast) and reports how
+many summarization/tagging calls it made, since those are billed too.
+
 ## Project layout
 
 ```
@@ -129,6 +144,6 @@ run.py      Starts the whole app with one command
 - [x] Phase 1: Project scaffold
 - [x] Phase 2: Database schema (SQLite + FTS5)
 - [x] Phase 3: X API sync engine (OAuth PKCE, pagination, thread expansion)
-- [ ] Phase 4: Enrichment pipeline (transcripts, article summaries, auto-tagging)
+- [x] Phase 4: Enrichment pipeline (transcripts, article summaries, auto-tagging)
 - [ ] Phase 5: Local web UI (search, tag filters, watch-later queue)
 - [ ] Phase 6: Polish (error handling, logging, optional scheduled sync)
