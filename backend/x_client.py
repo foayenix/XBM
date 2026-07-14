@@ -4,9 +4,14 @@ Deliberately narrow: only the calls the sync engine actually uses,
 with clear errors on rate limits / auth / scope problems instead of any
 scraping fallback.
 """
+import logging
+from datetime import datetime, timezone
+
 import httpx
 
 from backend import x_auth
+
+logger = logging.getLogger("xbm.x_client")
 
 API_BASE = "https://api.twitter.com/2"
 
@@ -30,20 +35,34 @@ class XClient:
     def _get(self, path: str, params: dict) -> dict:
         resp = self.http.get(f"{API_BASE}{path}", params=params, headers=self._headers())
         if resp.status_code == 429:
-            reset = resp.headers.get("x-rate-limit-reset", "unknown")
-            raise XApiError(
-                f"X API rate limit hit on {path}. Resets at unix time {reset}. "
+            reset_header = resp.headers.get("x-rate-limit-reset")
+            reset_desc = "an unknown time"
+            if reset_header:
+                try:
+                    reset_desc = datetime.fromtimestamp(int(reset_header), tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+                except ValueError:
+                    reset_desc = f"unix time {reset_header}"
+            error = XApiError(
+                f"X API rate limit hit on {path}. Resets at {reset_desc}. "
                 "Not retrying automatically — re-run sync after that."
             )
+            logger.warning(str(error))
+            raise error
         if resp.status_code == 401:
-            raise XApiError(f"X API returned 401 Unauthorized on {path}. Your token may be invalid — try /auth/login again.")
+            error = XApiError(f"X API returned 401 Unauthorized on {path}. Your token may be invalid — try /auth/login again.")
+            logger.warning(str(error))
+            raise error
         if resp.status_code == 403:
-            raise XApiError(
+            error = XApiError(
                 f"X API returned 403 Forbidden on {path}: {resp.text}. "
                 "Check that your X app has the bookmark.read scope approved."
             )
+            logger.warning(str(error))
+            raise error
         if resp.status_code >= 400:
-            raise XApiError(f"X API returned {resp.status_code} on {path}: {resp.text}")
+            error = XApiError(f"X API returned {resp.status_code} on {path}: {resp.text}")
+            logger.warning(str(error))
+            raise error
         return resp.json()
 
     def get_me(self) -> dict:

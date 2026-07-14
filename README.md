@@ -142,12 +142,27 @@ With the server running, http://127.0.0.1:8000 gives you:
 - A **Sync now** button that runs a full sync followed by enrichment and
   reports progress and final counts
 
+### 9. Logs and unattended scheduled sync
+
+Every run writes to `logs/xbm.log` (rotated at 2 MB, 3 backups kept) as
+well as the console, so if X rate-limits you or a token expires, there's
+always a clear message waiting for you — not just a crash. That matters
+most for the next feature:
+
+By default, sync only runs when you click **Sync now** or hit
+`/api/sync` yourself. If you'd rather it happen automatically, set
+`SYNC_INTERVAL_MINUTES` in `.env` to a positive number and restart the
+app — it'll run sync + enrichment on that interval in the background. A
+failed scheduled run (rate limit, expired token, network blip) is logged
+and retried on the next interval; it never crashes the app.
+
 ## Project layout
 
 ```
-backend/    FastAPI app, config, sync + enrichment logic (added in later phases)
+backend/    FastAPI app, config, sync + enrichment logic, scheduler
 frontend/   Static single-page web UI, served by FastAPI
 db/         SQLite database file lives here (gitignored)
+logs/       Rotating log file lives here (gitignored)
 scripts/    One-off / maintenance scripts
 run.py      Starts the whole app with one command
 ```
@@ -159,4 +174,4 @@ run.py      Starts the whole app with one command
 - [x] Phase 3: X API sync engine (OAuth PKCE, pagination, thread expansion)
 - [x] Phase 4: Enrichment pipeline (transcripts, article summaries, auto-tagging)
 - [x] Phase 5: Local web UI (search, tag filters, watch-later queue)
-- [ ] Phase 6: Polish (error handling, logging, optional scheduled sync)
+- [x] Phase 6: Polish (error handling, logging, optional scheduled sync)

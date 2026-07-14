@@ -232,10 +232,12 @@ def tag_untagged_bookmarks(conn) -> dict:
 
 def run_enrichment() -> dict:
     conn = db.get_connection()
-    seeded = seed_linked_content(conn)
-    content_summary = process_linked_content(conn)
-    tag_summary = tag_untagged_bookmarks(conn)
-    conn.close()
+    try:
+        seeded = seed_linked_content(conn)
+        content_summary = process_linked_content(conn)
+        tag_summary = tag_untagged_bookmarks(conn)
+    finally:
+        conn.close()
 
     summary = {"linked_content_seeded": seeded, **content_summary, **tag_summary}
     logger.info("Enrichment complete: %s", summary)

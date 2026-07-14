@@ -6,4 +6,5 @@ venv/
 db/*.sqlite3
 db/*.db
 *.log
+logs/
 .DS_Store

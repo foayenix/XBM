@@ -80,57 +80,67 @@ def _upsert_bookmark(conn, tweet: dict, author: dict, thread_chain: list[dict] |
 
 def sync_bookmarks() -> dict:
     conn = db.get_connection()
-    client = XClient()
-
-    user = x_auth.get_logged_in_user()
-    if not user:
-        me = client.get_me()
-        x_auth.store_logged_in_user(me["id"], me["username"])
-        user_id = me["id"]
-    else:
-        user_id = user["user_id"]
-
     new_count = 0
     updated_count = 0
     bookmark_reads = 0
     thread_tweet_reads = 0
-    pagination_token = None
-    synced_at = datetime.now(timezone.utc).isoformat()
 
-    while True:
-        page = client.get_bookmarks(user_id, pagination_token=pagination_token)
-        tweets = page.get("data", [])
-        bookmark_reads += len(tweets)
+    try:
+        client = XClient()
 
-        media_by_key = {m["media_key"]: m for m in page.get("includes", {}).get("media", [])}
-        users_by_id = {u["id"]: u for u in page.get("includes", {}).get("users", [])}
+        user = x_auth.get_logged_in_user()
+        if not user:
+            me = client.get_me()
+            x_auth.store_logged_in_user(me["id"], me["username"])
+            user_id = me["id"]
+        else:
+            user_id = user["user_id"]
 
-        for tweet in tweets:
-            author = users_by_id.get(tweet["author_id"], {})
+        pagination_token = None
+        synced_at = datetime.now(timezone.utc).isoformat()
 
-            thread_chain = None
-            refs = tweet.get("referenced_tweets") or []
-            if any(r["type"] == "replied_to" for r in refs):
-                thread_chain = client.expand_thread(tweet)
-                if thread_chain:
-                    thread_tweet_reads += len(thread_chain) - 1
+        while True:
+            page = client.get_bookmarks(user_id, pagination_token=pagination_token)
+            tweets = page.get("data", [])
+            bookmark_reads += len(tweets)
 
-            media_urls = _extract_media_urls(tweet, media_by_key)
-            external_links = _extract_external_links(tweet)
+            media_by_key = {m["media_key"]: m for m in page.get("includes", {}).get("media", [])}
+            users_by_id = {u["id"]: u for u in page.get("includes", {}).get("users", [])}
 
-            is_new = _upsert_bookmark(conn, tweet, author, thread_chain, media_urls, external_links, synced_at)
-            if is_new:
-                new_count += 1
-            else:
-                updated_count += 1
+            for tweet in tweets:
+                author = users_by_id.get(tweet["author_id"], {})
 
-        conn.commit()
+                thread_chain = None
+                refs = tweet.get("referenced_tweets") or []
+                if any(r["type"] == "replied_to" for r in refs):
+                    thread_chain = client.expand_thread(tweet)
+                    if thread_chain:
+                        thread_tweet_reads += len(thread_chain) - 1
 
-        pagination_token = page.get("meta", {}).get("next_token")
-        if not pagination_token:
-            break
+                media_urls = _extract_media_urls(tweet, media_by_key)
+                external_links = _extract_external_links(tweet)
 
-    conn.close()
+                is_new = _upsert_bookmark(conn, tweet, author, thread_chain, media_urls, external_links, synced_at)
+                if is_new:
+                    new_count += 1
+                else:
+                    updated_count += 1
+
+            conn.commit()  # commit each page so a later failure doesn't lose earlier pages' progress
+
+            pagination_token = page.get("meta", {}).get("next_token")
+            if not pagination_token:
+                break
+    except Exception:
+        logger.warning(
+            "Sync stopped early after %d new, %d updated bookmarks (%d bookmark reads so far). "
+            "Already-synced pages are saved; re-running will pick up from the beginning and skip "
+            "nothing thanks to the upsert-by-id logic, just re-reading a bit of already-seen data.",
+            new_count, updated_count, bookmark_reads,
+        )
+        raise
+    finally:
+        conn.close()
 
     summary = {
         "new": new_count,

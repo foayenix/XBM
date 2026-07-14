@@ -17,3 +17,9 @@ DATABASE_PATH = REPO_ROOT / os.environ.get("DATABASE_PATH", "db/xbm.sqlite3")
 
 APP_HOST = os.environ.get("APP_HOST", "127.0.0.1")
 APP_PORT = int(os.environ.get("APP_PORT", "8000"))
+
+LOG_DIR = REPO_ROOT / "logs"
+
+# Optional background sync. 0 (default) means off — sync only runs when you
+# click "Sync now" or hit /api/sync yourself.
+SYNC_INTERVAL_MINUTES = float(os.environ.get("SYNC_INTERVAL_MINUTES", "0") or "0")
