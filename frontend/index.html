@@ -3,44 +3,44 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>XBM - X Bookmarks</title>
+  <title>Later — X Bookmarks</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css" />
+  <script>
+    // Apply the saved theme before first paint to avoid a flash.
+    document.documentElement.dataset.theme =
+      localStorage.getItem("xbm-theme") ||
+      (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  </script>
 </head>
 <body>
-  <header class="topbar">
-    <h1>XBM</h1>
-    <div class="topbar-actions">
-      <span id="sync-status" class="sync-status"></span>
-      <button id="sync-btn">Sync now</button>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-name">Later</div>
+      <div class="brand-sub">x bookmarks library</div>
     </div>
-  </header>
-
-  <div class="layout">
-    <nav class="sidebar">
-      <button class="nav-item active" data-view="search" type="button">All bookmarks</button>
-      <button class="nav-item" data-view="watch-later" type="button">Watch later</button>
-      <h2>Tags</h2>
-      <ul id="tag-list" class="tag-list"></ul>
+    <nav class="nav">
+      <button id="nav-library" class="nav-item" type="button">
+        <span>Library</span><span id="nav-library-count" class="nav-count"></span>
+      </button>
+      <button id="nav-queue" class="nav-item" type="button">
+        <span>Watch Later</span><span id="nav-queue-count" class="nav-count"></span>
+      </button>
     </nav>
+    <div class="sidebar-tags">
+      <div class="side-label">Tags</div>
+      <div id="tag-list" class="tag-list"></div>
+    </div>
+    <div class="sidebar-footer">
+      <button id="theme-toggle" class="theme-toggle" type="button"></button>
+      <div id="sync-area" class="sync-area"></div>
+      <div class="sync-note">each sync bills x api reads</div>
+    </div>
+  </aside>
 
-    <main>
-      <section id="search-view" class="view">
-        <input id="search-input" type="search" placeholder="Search bookmarks..." autocomplete="off" />
-        <div id="results" class="results"></div>
-        <p id="results-status" class="status-line"></p>
-      </section>
-
-      <section id="watch-later-view" class="view" hidden>
-        <div class="wl-filters">
-          <button class="wl-filter active" data-status="unwatched" type="button">Unwatched</button>
-          <button class="wl-filter" data-status="watched" type="button">Watched</button>
-          <button class="wl-filter" data-status="" type="button">All</button>
-        </div>
-        <div id="watch-later-results" class="results"></div>
-        <p id="watch-later-status" class="status-line"></p>
-      </section>
-    </main>
-  </div>
+  <main id="main"></main>
 
   <script src="/static/app.js"></script>
 </body>

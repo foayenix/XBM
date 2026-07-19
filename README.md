@@ -131,16 +131,26 @@ many summarization/tagging calls it made, since those are billed too.
 
 ### 8. Use the web UI
 
-With the server running, http://127.0.0.1:8000 gives you:
+With the server running, http://127.0.0.1:8000 opens **Later**, the
+library UI (light and dark mode, toggle in the sidebar footer):
 
-- A search bar over the full-text index (tweet text, thread text, linked
-  article summaries/transcripts, and tags)
+- A **Library** view: search bar over the full-text index (tweet text,
+  thread text, linked article summaries/transcripts, and tags), with
+  press-`/`-to-search, type filter chips (threads / articles / videos /
+  tweets), and every item classified and color-coded by content type
 - A tag sidebar — click a tag to filter, click again to clear it
-- A **Watch later** view listing every bookmark with a YouTube link
-  (added automatically during enrichment), with unwatched/watched/all
-  filters and a toggle per item
-- A **Sync now** button that runs a full sync followed by enrichment and
-  reports progress and final counts
+- A **Watch Later** queue for bookmarks with a YouTube link (added
+  automatically during enrichment): an "up next" card, the remaining
+  queue, and a dimmed watched section with per-item toggles
+- An **item detail** view per bookmark: full expanded thread, embedded
+  video link + transcript excerpt, or article summary with source link —
+  plus editable tags, so you can correct the auto-tagging (click × to
+  remove, type in the dashed box and press Enter to add)
+- A **sync now** button in the sidebar footer that runs a full sync
+  followed by enrichment and reports new items and billed API reads
+
+The UI loads its three fonts from Google Fonts; without internet it
+falls back to system fonts and still works fine.
 
 ### 9. Logs and unattended scheduled sync
 
