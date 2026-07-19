@@ -8,9 +8,7 @@ the thread — it just tries again on the next interval.
 import logging
 import threading
 
-from backend import config
-from backend.enrich import run_enrichment
-from backend.sync import sync_bookmarks
+from backend import config, jobs
 
 logger = logging.getLogger("xbm.scheduler")
 
@@ -21,12 +19,11 @@ _thread: threading.Thread | None = None
 def _run_loop(interval_minutes: float) -> None:
     logger.info("Scheduled sync enabled: running every %s minutes", interval_minutes)
     while not _stop_event.wait(interval_minutes * 60):
-        try:
-            sync_summary = sync_bookmarks()
-            enrich_summary = run_enrichment()
-            logger.info("Scheduled sync complete: %s | %s", sync_summary, enrich_summary)
-        except Exception:
-            logger.exception("Scheduled sync run failed; will retry on the next interval")
+        # Going through the shared job means scheduled runs show live in the
+        # web UI and can never overlap a manual "sync now". Failures are
+        # captured (and logged) by the job itself; the loop just keeps going.
+        if not jobs.run_blocking():
+            logger.info("Scheduled sync skipped: another sync is already running")
 
 
 def start() -> None:

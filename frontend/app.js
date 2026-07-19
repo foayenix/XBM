@@ -20,7 +20,7 @@ const state = {
   detailId: null,
   stats: null,
   syncing: false,
-  syncPhase: "",
+  syncStatus: null, // last /api/sync/status snapshot while a job runs
   syncMessage: null, // {text, error} shown in the footer after a sync
 };
 
@@ -176,13 +176,46 @@ function renderTheme() {
   $("theme-toggle").textContent = theme === "light" ? "◐ dark mode" : "◐ light mode";
 }
 
+// Human label for the current job phase, from a /api/sync/status snapshot.
+function syncProgressText(s) {
+  if (!s) return "starting…";
+  if (s.phase === "sync") {
+    return s.fetched ? `fetching ${s.fetched} bookmarks…` : "contacting x…";
+  }
+  if (s.phase === "enrich") {
+    // Linked-content stage first, then tagging — each with a known total.
+    if (s.enrich_total && s.enrich_done < s.enrich_total) {
+      return `enriching ${s.enrich_done} / ${s.enrich_total} links`;
+    }
+    if (s.tag_total) return `tagging ${Math.min(s.tag_done, s.tag_total)} / ${s.tag_total}`;
+    if (s.enrich_total) return `enriching ${s.enrich_done} / ${s.enrich_total} links`;
+    return "enriching…";
+  }
+  return "starting…";
+}
+
+// Fraction for a determinate bar, or null when the total is unknowable
+// (the sync phase — X's API doesn't report a bookmark count up front).
+function syncFraction(s) {
+  if (!s || s.phase !== "enrich") return null;
+  const total = (s.enrich_total || 0) + (s.tag_total || 0);
+  if (!total) return null;
+  return Math.min(1, ((s.enrich_done || 0) + (s.tag_done || 0)) / total);
+}
+
 function renderSyncArea() {
   const area = $("sync-area");
   area.textContent = "";
   if (state.syncing) {
-    area.appendChild(el("div", "sync-label", state.syncPhase));
+    area.appendChild(el("div", "sync-label", syncProgressText(state.syncStatus)));
     const bar = el("div", "sync-bar");
-    bar.appendChild(el("div", "sync-bar-fill"));
+    const fill = el("div", "sync-bar-fill");
+    const frac = syncFraction(state.syncStatus);
+    if (frac !== null) {
+      fill.classList.add("determinate");
+      fill.style.width = Math.round(frac * 100) + "%";
+    }
+    bar.appendChild(fill);
     area.appendChild(bar);
     return;
   }
@@ -404,7 +437,9 @@ function showFirstRun(main) {
     btn.addEventListener("click", syncNow);
     box.appendChild(btn);
   } else {
-    box.appendChild(el("div", "empty-note", state.syncPhase));
+    const note = el("div", "empty-note", syncProgressText(state.syncStatus));
+    note.id = "first-run-note";
+    box.appendChild(note);
   }
   box.appendChild(el("div", "empty-note", "reads are billed by x · usually under a minute"));
   wrap.appendChild(box);
@@ -700,35 +735,69 @@ async function showDetail(main) {
 
 // ---------- sync ----------
 
+let syncPollTimer = null;
+
 async function syncNow() {
   if (state.syncing) return;
-  state.syncing = true;
-  state.syncMessage = null;
-  state.syncPhase = "syncing bookmarks…";
-  renderSyncArea();
-  if (state.stats && state.stats.total === 0) render();
-
   try {
-    const sync = await api("/api/sync", { method: "POST" });
-    state.syncPhase = "enriching · transcripts, summaries, tags…";
-    renderSyncArea();
-    if (state.stats && state.stats.total === 0) render();
-
-    const enrich = await api("/api/enrich", { method: "POST" });
-    const reads = (sync.bookmark_api_reads || 0) + (sync.thread_expansion_api_reads || 0);
-    state.syncMessage = {
-      text: `${sync.new} new · ${reads} x reads · ${enrich.bookmarks_tagged} tagged`,
-      error: false,
-    };
+    await api("/api/sync/start", { method: "POST" });
   } catch (err) {
-    state.syncMessage = { text: err.message, error: true };
-  } finally {
-    state.syncing = false;
+    // 409 means a job (e.g. a scheduled sync) is already running — just
+    // start watching it. Anything else is a real failure.
+    if (!/already running/i.test(err.message)) {
+      state.syncMessage = { text: err.message, error: true };
+      renderSyncArea();
+      return;
+    }
   }
+  watchSync();
+}
 
-  await loadStats();
-  await loadTags();
-  render();
+// Poll /api/sync/status until the job finishes, painting live progress.
+function watchSync() {
+  if (state.syncing) return;
+  state.syncing = true;
+  state.syncStatus = null;
+  state.syncMessage = null;
+  renderSyncArea();
+  if (state.stats && state.stats.total === 0) render(); // first-run hero → progress note
+
+  const poll = async () => {
+    let s;
+    try {
+      s = await api("/api/sync/status");
+    } catch (_) {
+      syncPollTimer = setTimeout(poll, 1500); // server hiccup; keep watching
+      return;
+    }
+
+    if (s.running) {
+      state.syncStatus = s;
+      renderSyncArea();
+      const note = $("first-run-note");
+      if (note) note.textContent = syncProgressText(s);
+      syncPollTimer = setTimeout(poll, 700);
+      return;
+    }
+
+    // Finished (or nothing was ever running).
+    state.syncing = false;
+    state.syncStatus = null;
+    if (s.phase === "error") {
+      state.syncMessage = { text: s.error || "sync failed", error: true };
+    } else if (s.phase === "done" && s.result) {
+      const r = s.result;
+      const reads = (r.bookmark_api_reads || 0) + (r.thread_expansion_api_reads || 0);
+      state.syncMessage = {
+        text: `${r.new} new · ${reads} x reads · ${r.bookmarks_tagged} tagged`,
+        error: false,
+      };
+    }
+    await loadStats();
+    await loadTags();
+    render();
+  };
+  poll();
 }
 
 // ---------- shell ----------
@@ -795,6 +864,12 @@ async function init() {
   }
   loadTags();
   render();
+  // A sync may already be underway (a scheduled run, or another tab
+  // started one) — if so, surface its progress right away.
+  try {
+    const s = await api("/api/sync/status");
+    if (s.running) watchSync();
+  } catch (_) {}
 }
 
 init();

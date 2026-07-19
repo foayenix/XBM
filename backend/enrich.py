@@ -123,13 +123,16 @@ def _summarize_article(client: Anthropic, title: str, text: str) -> str:
     return resp.content[0].text.strip()
 
 
-def process_linked_content(conn) -> dict:
+def process_linked_content(conn, progress=None) -> dict:
     client = None  # lazily created only if an article actually needs summarizing
     pending = conn.execute("SELECT * FROM linked_content WHERE status != 'done'").fetchall()
 
     done = 0
     failed = 0
     claude_calls = 0
+
+    if progress:
+        progress(enrich_total=len(pending), enrich_done=0)
 
     for row in pending:
         now = datetime.now(timezone.utc).isoformat()
@@ -165,6 +168,8 @@ def process_linked_content(conn) -> dict:
             )
             failed += 1
         conn.commit()  # commit per item so a crash mid-run loses at most one item's progress
+        if progress:
+            progress(enrich_done=done + failed)
 
     return {"linked_content_done": done, "linked_content_failed": failed, "claude_summary_calls": claude_calls}
 
@@ -199,13 +204,16 @@ def _tag_bookmark(client: Anthropic, conn, bookmark: dict) -> list[str]:
     return _parse_tags(resp.content[0].text)
 
 
-def tag_untagged_bookmarks(conn) -> dict:
+def tag_untagged_bookmarks(conn, progress=None) -> dict:
     rows = conn.execute(
         """
         SELECT b.id, b.text, b.thread_text FROM bookmarks b
         WHERE NOT EXISTS (SELECT 1 FROM bookmark_tags bt WHERE bt.bookmark_id = b.id)
         """
     ).fetchall()
+
+    if progress:
+        progress(tag_total=len(rows), tag_done=0)
 
     if not rows:
         return {"bookmarks_tagged": 0, "claude_tagging_calls": 0}
@@ -214,7 +222,7 @@ def tag_untagged_bookmarks(conn) -> dict:
     tagged = 0
     calls = 0
 
-    for row in rows:
+    for i, row in enumerate(rows):
         try:
             tags = _tag_bookmark(client, conn, row)
             calls += 1
@@ -226,16 +234,24 @@ def tag_untagged_bookmarks(conn) -> dict:
         except Exception as e:
             logger.warning("Tagging failed for bookmark id=%s: %s", row["id"], e)
         conn.commit()
+        if progress:
+            progress(tag_done=i + 1)
 
     return {"bookmarks_tagged": tagged, "claude_tagging_calls": calls}
 
 
-def run_enrichment() -> dict:
+def run_enrichment(progress=None) -> dict:
+    """Run the full enrichment pass.
+
+    `progress`, if given, receives enrich_done/enrich_total (linked content)
+    and tag_done/tag_total (bookmark tagging) keyword updates as work
+    proceeds, so callers can show a determinate progress bar.
+    """
     conn = db.get_connection()
     try:
         seeded = seed_linked_content(conn)
-        content_summary = process_linked_content(conn)
-        tag_summary = tag_untagged_bookmarks(conn)
+        content_summary = process_linked_content(conn, progress)
+        tag_summary = tag_untagged_bookmarks(conn, progress)
     finally:
         conn.close()
 

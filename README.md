@@ -146,8 +146,11 @@ library UI (light and dark mode, toggle in the sidebar footer):
   video link + transcript excerpt, or article summary with source link —
   plus editable tags, so you can correct the auto-tagging (click × to
   remove, type in the dashed box and press Enter to add)
-- A **sync now** button in the sidebar footer that runs a full sync
-  followed by enrichment and reports new items and billed API reads
+- A **sync now** button in the sidebar footer that runs sync + enrichment
+  as a background job with live progress: a bookmark count while
+  fetching, then a determinate "enriching n / m" bar, then a summary of
+  new items and billed API reads. Reloading the page mid-sync (or during
+  a scheduled sync) picks the progress display back up.
 
 The UI loads its three fonts from Google Fonts; without internet it
 falls back to system fonts and still works fine.
@@ -159,12 +162,16 @@ well as the console, so if X rate-limits you or a token expires, there's
 always a clear message waiting for you — not just a crash. That matters
 most for the next feature:
 
-By default, sync only runs when you click **Sync now** or hit
-`/api/sync` yourself. If you'd rather it happen automatically, set
+By default, sync only runs when you click **sync now** (which starts a
+background job via `POST /api/sync/start`; `GET /api/sync/status` reports
+its progress) or when you hit the synchronous `/api/sync` endpoint
+yourself. If you'd rather it happen automatically, set
 `SYNC_INTERVAL_MINUTES` in `.env` to a positive number and restart the
-app — it'll run sync + enrichment on that interval in the background. A
-failed scheduled run (rate limit, expired token, network blip) is logged
-and retried on the next interval; it never crashes the app.
+app — it'll run sync + enrichment on that interval in the background,
+through the same job machinery, so a scheduled run shows its progress in
+the UI and can never overlap a manual one. A failed scheduled run (rate
+limit, expired token, network blip) is logged and retried on the next
+interval; it never crashes the app.
 
 ## Project layout
 

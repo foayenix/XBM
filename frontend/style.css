@@ -234,6 +234,12 @@ mark {
   animation: slide 1.2s ease-in-out infinite;
 }
 
+/* Once totals are known (enrichment), the bar becomes determinate. */
+.sync-bar-fill.determinate {
+  animation: none;
+  transition: width 0.3s ease;
+}
+
 @keyframes slide {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(250%); }

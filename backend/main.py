@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from backend import config, db, queries, scheduler, x_auth
+from backend import config, db, jobs, queries, scheduler, x_auth
 from backend.enrich import EnrichmentError, run_enrichment
 from backend.sync import sync_bookmarks
 from backend.x_auth import XAuthError
@@ -76,8 +76,22 @@ def auth_status():
     return {"logged_in": user is not None, "user": user}
 
 
+@app.post("/api/sync/start")
+def api_sync_start():
+    """Start sync + enrichment as a background job; poll /api/sync/status."""
+    if not jobs.start_background():
+        raise HTTPException(status_code=409, detail="A sync is already running")
+    return {"started": True}
+
+
+@app.get("/api/sync/status")
+def api_sync_status():
+    return jobs.snapshot()
+
+
 @app.post("/api/sync")
 def api_sync():
+    """Synchronous sync, kept for scripts/curl. The web UI uses /api/sync/start."""
     try:
         return sync_bookmarks()
     except (XAuthError, XApiError) as e:

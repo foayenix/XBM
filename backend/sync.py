@@ -78,7 +78,12 @@ def _upsert_bookmark(conn, tweet: dict, author: dict, thread_chain: list[dict] |
     return existing is None
 
 
-def sync_bookmarks() -> dict:
+def sync_bookmarks(progress=None) -> dict:
+    """Pull and upsert all bookmarks.
+
+    `progress`, if given, is called as progress(fetched=…, new=…, updated=…)
+    after every processed bookmark so callers can show live counts.
+    """
     conn = db.get_connection()
     new_count = 0
     updated_count = 0
@@ -125,6 +130,8 @@ def sync_bookmarks() -> dict:
                     new_count += 1
                 else:
                     updated_count += 1
+                if progress:
+                    progress(fetched=new_count + updated_count, new=new_count, updated=updated_count)
 
             conn.commit()  # commit each page so a later failure doesn't lose earlier pages' progress
 
