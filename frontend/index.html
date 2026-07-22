@@ -3,43 +3,47 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>XBM - X Bookmarks</title>
+  <title>Later — X Bookmarks Library</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <h1>XBM</h1>
-    <div class="topbar-actions">
-      <span id="sync-status" class="sync-status"></span>
-      <button id="sync-btn">Sync now</button>
-    </div>
-  </header>
+  <div class="xbroot" id="root" data-app-theme="light">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">Later</div>
+        <div class="brand-kicker">x bookmarks library</div>
+      </div>
 
-  <div class="layout">
-    <nav class="sidebar">
-      <button class="nav-item active" data-view="search" type="button">All bookmarks</button>
-      <button class="nav-item" data-view="watch-later" type="button">Watch later</button>
-      <h2>Tags</h2>
-      <ul id="tag-list" class="tag-list"></ul>
-    </nav>
+      <nav class="nav">
+        <button class="nav-item" data-view="library" type="button">
+          <span>Library</span>
+          <span class="nav-count" id="lib-count"></span>
+        </button>
+        <button class="nav-item" data-view="queue" type="button">
+          <span>Watch Later</span>
+          <span class="nav-count" id="queue-count"></span>
+        </button>
+      </nav>
 
-    <main>
-      <section id="search-view" class="view">
-        <input id="search-input" type="search" placeholder="Search bookmarks..." autocomplete="off" />
-        <div id="results" class="results"></div>
-        <p id="results-status" class="status-line"></p>
-      </section>
+      <div class="tags-section">
+        <div class="section-label">Tags</div>
+        <div class="tag-list" id="tag-list"></div>
+      </div>
 
-      <section id="watch-later-view" class="view" hidden>
-        <div class="wl-filters">
-          <button class="wl-filter active" data-status="unwatched" type="button">Unwatched</button>
-          <button class="wl-filter" data-status="watched" type="button">Watched</button>
-          <button class="wl-filter" data-status="" type="button">All</button>
-        </div>
-        <div id="watch-later-results" class="results"></div>
-        <p id="watch-later-status" class="status-line"></p>
-      </section>
-    </main>
+      <div class="sidebar-footer">
+        <button class="theme-toggle" id="theme-toggle" type="button"></button>
+        <div class="sync-box" id="sync-box"></div>
+        <div class="sync-note">each sync bills x api reads</div>
+      </div>
+    </aside>
+
+    <main class="content" id="content"></main>
   </div>
 
   <script src="/static/app.js"></script>

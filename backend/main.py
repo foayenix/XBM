@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -94,10 +94,25 @@ def api_enrich():
 
 
 @app.get("/api/search")
-def api_search(q: str | None = None, tag: list[str] = Query(default=[]), limit: int = 30, offset: int = 0):
+def api_search(
+    q: str | None = None,
+    tag: list[str] = Query(default=[]),
+    type: str | None = None,
+    limit: int = 30,
+    offset: int = 0,
+):
     conn = db.get_connection()
     try:
-        return queries.search_bookmarks(conn, q, tag, limit, offset)
+        return queries.search_bookmarks(conn, q, tag, type, limit, offset)
+    finally:
+        conn.close()
+
+
+@app.get("/api/summary")
+def api_summary():
+    conn = db.get_connection()
+    try:
+        return queries.library_summary(conn)
     finally:
         conn.close()
 
@@ -107,6 +122,39 @@ def api_tags():
     conn = db.get_connection()
     try:
         return queries.list_tags(conn)
+    finally:
+        conn.close()
+
+
+@app.get("/api/bookmark/{bookmark_id}")
+def api_bookmark_detail(bookmark_id: int):
+    conn = db.get_connection()
+    try:
+        detail = queries.get_bookmark_detail(conn, bookmark_id)
+        if detail is None:
+            raise HTTPException(status_code=404, detail="No bookmark with that id")
+        return detail
+    finally:
+        conn.close()
+
+
+@app.post("/api/bookmark/{bookmark_id}/tags")
+def api_add_tag(bookmark_id: int, name: str = Body(..., embed=True)):
+    conn = db.get_connection()
+    try:
+        result = queries.add_tag(conn, bookmark_id, name)
+        if result is None:
+            raise HTTPException(status_code=400, detail="No bookmark with that id, or an empty tag name")
+        return result
+    finally:
+        conn.close()
+
+
+@app.delete("/api/bookmark/{bookmark_id}/tags/{name}")
+def api_remove_tag(bookmark_id: int, name: str):
+    conn = db.get_connection()
+    try:
+        return queries.remove_tag(conn, bookmark_id, name)
     finally:
         conn.close()
 
