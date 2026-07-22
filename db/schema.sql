@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS linked_content (
     url                   TEXT NOT NULL,
     title                 TEXT,
     transcript_or_summary TEXT,
+    duration_seconds      INTEGER,   -- video length, derived from the transcript timeline
+    reading_minutes       INTEGER,   -- article read time, derived from word count
     status                TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'done', 'failed')),
     error                 TEXT,
     fetched_at            TEXT,

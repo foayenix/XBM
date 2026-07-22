@@ -70,13 +70,22 @@ def seed_linked_content(conn) -> int:
     return seeded
 
 
-def _fetch_youtube_transcript(url: str) -> tuple[str, str | None]:
+def _fetch_youtube_transcript(url: str) -> tuple[str, str | None, int | None]:
     video_id = extract_youtube_video_id(url)
     if not video_id:
         raise EnrichmentError(f"Could not parse a YouTube video id out of {url}")
 
     fetched = YouTubeTranscriptApi().fetch(video_id)
-    text = " ".join(snippet.text for snippet in fetched)
+    # The transcript is a timeline: each snippet has a start offset and a
+    # duration, so the end of the last snippet is a good estimate of the
+    # video's total length — enough for the "42:17" style labels in the UI.
+    duration_seconds = None
+    snippets = list(fetched)
+    if snippets:
+        last = snippets[-1]
+        duration_seconds = int(round(last.start + (last.duration or 0)))
+
+    text = " ".join(snippet.text for snippet in snippets)
     text = re.sub(r"\s+", " ", text).strip()[:TRANSCRIPT_CHAR_LIMIT]
     if not text:
         raise EnrichmentError(f"YouTube returned an empty transcript for {url}")
@@ -94,16 +103,22 @@ def _fetch_youtube_transcript(url: str) -> tuple[str, str | None]:
     except httpx.HTTPError:
         pass  # title is a nice-to-have, not worth failing the whole item over
 
-    return text, title
+    return text, title, duration_seconds
 
 
-def _extract_article_text(html: str) -> tuple[str, str]:
+# Rough average adult reading speed; good enough for a "9 min read" label.
+WORDS_PER_MINUTE = 200
+
+
+def _extract_article_text(html: str) -> tuple[str, str, int]:
     doc = Document(html)
     title = doc.short_title() or ""
     import lxml.html as lh
     fragment = lh.fromstring(doc.summary())
-    text = " ".join(fragment.text_content().split())
-    return text, title
+    words = fragment.text_content().split()
+    text = " ".join(words)
+    reading_minutes = max(1, round(len(words) / WORDS_PER_MINUTE)) if words else None
+    return text, title, reading_minutes
 
 
 def _summarize_article(client: Anthropic, title: str, text: str) -> str:
@@ -135,10 +150,10 @@ def process_linked_content(conn) -> dict:
         now = datetime.now(timezone.utc).isoformat()
         try:
             if row["type"] == "youtube":
-                transcript, title = _fetch_youtube_transcript(row["url"])
+                transcript, title, duration_seconds = _fetch_youtube_transcript(row["url"])
                 conn.execute(
-                    "UPDATE linked_content SET transcript_or_summary=?, title=?, status='done', error=NULL, fetched_at=? WHERE id=?",
-                    (transcript, title, now, row["id"]),
+                    "UPDATE linked_content SET transcript_or_summary=?, title=?, duration_seconds=?, status='done', error=NULL, fetched_at=? WHERE id=?",
+                    (transcript, title, duration_seconds, now, row["id"]),
                 )
                 conn.execute(
                     "INSERT OR IGNORE INTO watch_later (bookmark_id, status, added_at) VALUES (?, 'unwatched', ?)",
@@ -147,14 +162,14 @@ def process_linked_content(conn) -> dict:
             else:  # article
                 resp = httpx.get(row["url"], headers=HTTP_HEADERS, timeout=20.0, follow_redirects=True)
                 resp.raise_for_status()
-                text, title = _extract_article_text(resp.text)
+                text, title, reading_minutes = _extract_article_text(resp.text)
                 if client is None:
                     client = _claude_client()
                 summary = _summarize_article(client, title, text)
                 claude_calls += 1
                 conn.execute(
-                    "UPDATE linked_content SET transcript_or_summary=?, title=?, status='done', error=NULL, fetched_at=? WHERE id=?",
-                    (summary, title, now, row["id"]),
+                    "UPDATE linked_content SET transcript_or_summary=?, title=?, reading_minutes=?, status='done', error=NULL, fetched_at=? WHERE id=?",
+                    (summary, title, reading_minutes, now, row["id"]),
                 )
             done += 1
         except Exception as e:

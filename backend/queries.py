@@ -37,6 +37,19 @@ TYPE_CLAUSES = {
 }
 
 
+def format_duration(secs: int | None) -> str | None:
+    """Seconds -> "M:SS" (or "H:MM:SS" past an hour), matching the design's
+    video-length labels."""
+    if not secs:
+        return None
+    secs = int(secs)
+    hours, rem = divmod(secs, 3600)
+    mins, s = divmod(rem, 60)
+    if hours:
+        return f"{hours}:{mins:02d}:{s:02d}"
+    return f"{mins}:{s:02d}"
+
+
 def _thumbnail_for(conn, bookmark_id: int, media_urls: list[str]) -> str | None:
     if media_urls:
         return media_urls[0]
@@ -103,23 +116,33 @@ def _attach_types_and_titles(conn, bookmarks: list[dict]) -> None:
         else:
             type_by_id[r["id"]] = "tweet"
 
-    # Prefer a YouTube title, fall back to an article title. Ordering youtube
-    # first means a video with both link kinds still shows its video title.
-    title_rows = conn.execute(
+    # Pull the linked-content metadata the rows and detail view show: the
+    # title (prefer a YouTube title, fall back to an article headline), the
+    # video duration, and the article reading time. Ordering youtube first
+    # means a video with both link kinds still shows its video title.
+    meta_rows = conn.execute(
         f"""
-        SELECT bookmark_id, title, type FROM linked_content
-        WHERE bookmark_id IN ({placeholders}) AND title IS NOT NULL AND title != ''
+        SELECT bookmark_id, type, title, duration_seconds, reading_minutes
+        FROM linked_content
+        WHERE bookmark_id IN ({placeholders})
         ORDER BY CASE type WHEN 'youtube' THEN 0 ELSE 1 END
         """,
         ids,
     ).fetchall()
-    title_by_id: dict[int, str] = {}
-    for r in title_rows:
-        title_by_id.setdefault(r["bookmark_id"], r["title"])
+    meta_by_id: dict[int, list] = {}
+    for r in meta_rows:
+        meta_by_id.setdefault(r["bookmark_id"], []).append(r)
 
     for b in bookmarks:
+        rows = meta_by_id.get(b["id"], [])
         b["type"] = type_by_id.get(b["id"], "tweet")
-        b["title"] = title_by_id.get(b["id"])
+        b["title"] = next((r["title"] for r in rows if r["title"]), None)
+        dur = next((r["duration_seconds"] for r in rows if r["type"] == "youtube" and r["duration_seconds"]), None)
+        b["duration_seconds"] = dur
+        b["duration"] = format_duration(dur)
+        b["reading_minutes"] = next(
+            (r["reading_minutes"] for r in rows if r["type"] == "article" and r["reading_minutes"]), None
+        )
 
 
 def _row_to_result(conn, r) -> dict:

@@ -97,7 +97,16 @@ function initials(name, username) {
 function typeLabel(item) {
   const base = (TYPES[item.type] || TYPES.tweet).label;
   if (item.type === "thread" && item.post_count) return `${base} · ${item.post_count} posts`;
+  if (item.type === "video" && item.duration) return `${base} · ${item.duration}`;
+  if (item.type === "article" && item.reading_minutes) return `${base} · ${item.reading_minutes} min`;
   return base;
+}
+
+// Sum of video seconds -> "2h 14m", matching the queue runtime subtitle.
+function formatRuntime(secs) {
+  const hours = Math.floor(secs / 3600);
+  const mins = Math.round((secs % 3600) / 60);
+  return `${hours}h ${String(mins).padStart(2, "0")}m`;
 }
 
 function xUrl(item) {
@@ -131,7 +140,7 @@ function snippetNodes(text) {
 // Build a thumbnail box: the striped placeholder from CSS, with the real
 // image layered on top when present (removed on error so the placeholder
 // shows through), plus an optional label and play affordance.
-function thumbBox(cls, item, { label, play } = {}) {
+function thumbBox(cls, item, { label, play, dur } = {}) {
   const box = el("div", { class: `thumb ${cls}` });
   if (label) box.appendChild(el("span", { class: "thumb-label", text: label }));
   if (item && item.thumbnail) {
@@ -144,6 +153,7 @@ function thumbBox(cls, item, { label, play } = {}) {
     box.appendChild(img);
   }
   if (play) box.appendChild(el("span", { class: `play ${play}`, text: "▸" }));
+  if (dur) box.appendChild(el("span", { class: "thumb-dur", text: dur }));
   return box;
 }
 
@@ -351,7 +361,7 @@ function libraryRow(item) {
 
   const children = [glyph, body];
   if (item.type === "video") {
-    children.push(thumbBox("row-thumb", item, { label: "thumbnail" }));
+    children.push(thumbBox("row-thumb", item, { label: "thumbnail", dur: item.duration }));
   }
 
   return el(
@@ -449,7 +459,7 @@ function watchCheck(item, on) {
 }
 
 function upNextCard(item) {
-  const media = thumbBox("upnext-thumb", item, { label: "video thumbnail", play: "play-lg" });
+  const media = thumbBox("upnext-thumb", item, { label: "video thumbnail", play: "play-lg", dur: item.duration });
 
   const openX = el("a", {
     text: "open on x ↗",
@@ -485,7 +495,7 @@ function upNextCard(item) {
 }
 
 function queueRow(item, num) {
-  const media = thumbBox("qthumb", item, {});
+  const media = thumbBox("qthumb", item, { dur: item.duration });
   return el(
     "div",
     { class: "qrow", on: { click: () => openDetail(item.id) } },
@@ -529,11 +539,16 @@ async function renderQueue() {
   const unwatched = items.filter((i) => i.watch_status === "unwatched");
   const watched = items.filter((i) => i.watch_status === "watched");
 
+  const totalSecs = unwatched.reduce((a, v) => a + (v.duration_seconds || 0), 0);
+  const sub = totalSecs > 0
+    ? `${unwatched.length} unwatched · ${formatRuntime(totalSecs)}`
+    : `${unwatched.length} unwatched`;
+
   const wrap = el("div", { class: "queue-wrap" });
   wrap.appendChild(
     el("div", { class: "queue-head" }, [
       el("h1", { class: "queue-title", text: "Watch Later" }),
-      el("span", { class: "queue-sub", text: `${unwatched.length} unwatched` }),
+      el("span", { class: "queue-sub", text: sub }),
     ])
   );
 
@@ -624,7 +639,8 @@ async function renderDetail() {
 
   if (d.title) wrap.appendChild(el("h1", { class: "detail-title", text: d.title }));
 
-  // body varies by type
+  // Body varies by type. For video the tweet text sits *below* the embed
+  // (added in the video block further down), so it isn't rendered here.
   if (d.type === "tweet") {
     wrap.appendChild(el("p", { class: "detail-tweet", text: d.text || "" }));
   } else if (d.type === "thread" && d.posts && d.posts.length) {
@@ -638,7 +654,8 @@ async function renderDetail() {
       );
     });
     wrap.appendChild(posts);
-  } else {
+  } else if (d.type !== "video") {
+    // article, or a thread that has no expanded posts
     wrap.appendChild(el("p", { class: "detail-lead", text: d.text || "" }));
   }
 
@@ -647,8 +664,10 @@ async function renderDetail() {
   const article = (d.linked || []).find((l) => l.type === "article");
 
   if (d.type === "video") {
-    const embed = thumbBox("video-embed", d, { label: "embedded video", play: "play-xl" });
+    const caption = d.duration ? `embedded video · ${d.duration}` : "embedded video";
+    const embed = thumbBox("video-embed", d, { label: caption, play: "play-xl" });
     const box = el("div", { class: "detail-video" }, [embed]);
+    if (d.text) box.appendChild(el("p", { class: "detail-video-text", text: d.text }));
     if (video && video.content) {
       box.appendChild(
         el("div", { class: "excerpt-card" }, [

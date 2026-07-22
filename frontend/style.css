@@ -873,6 +873,14 @@ a:hover { text-decoration: underline; }
 
 .detail-video { margin-top: 22px; }
 
+.detail-video-text {
+  font-family: var(--serif);
+  font-size: 16.5px;
+  line-height: 1.55;
+  color: var(--ink2);
+  margin: 20px 0 0;
+}
+
 .video-embed {
   aspect-ratio: 16 / 9;
   border-radius: 11px;
