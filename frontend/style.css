@@ -1,51 +1,72 @@
-/* Design tokens.
-   Neutrals are slightly blue-tinted rather than pure gray, so text and
-   chrome sit in the same colour family as the accent instead of looking
-   like two unrelated palettes. */
+/* XBM — "Console" direction.
+   Dense, keyboard-first, monospace metadata over a sans reading column.
+   Dark is the native theme; the light variant keeps the same structure and
+   density on a warm-neutral ground rather than inverting to plain white.
+   Every colour pair here was contrast-checked in both themes. */
 :root {
-  --bg: #ffffff;
-  --bg-sidebar: #f6f7f9;
-  --text: #16181d;
-  --text-muted: #5f6672;
-  --border: #e3e6ea;
-  --accent: #2563eb;
-  --accent-fg: #ffffff;
-  --danger: #b42318;
-  --mark-bg: #fde68a;
-  --card-bg: #ffffff;
-  --card-hover: #f6f7f9;
-  --focus: #2563eb;
+  color-scheme: dark;
+  --bg: #0E1014;
+  --panel: #151A21;
+  --input-bg: #161A21;
+  --border: #23272F;
+  --border-subtle: #1A1E25;
+  --text: #D8DEE7;
+  --text-strong: #ECF0F6;
+  --muted: #8A93A3;
+  --dim: #828B99;
+  --accent: #E3A33C;
+  --accent-fg: #14161A;
+  --danger: #FF9D92;
+  --focus: #E3A33C;
 
-  /* One scale, so nothing invents its own timing. */
-  --motion-fast: 120ms;
-  --motion: 160ms;
+  --kind-thread: #E3A33C;
+  --kind-thread-edge: #5C451F;
+  --kind-video: #7FC4A0;
+  --kind-video-edge: #2E5843;
+  --kind-article: #8AB4F8;
+  --kind-article-edge: #2C4470;
+  --kind-tweet: #8A93A3;
+  --kind-tweet-edge: #333A45;
+
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --motion-fast: 110ms;
+  --motion: 150ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
-
-  /* Minimum comfortable hit area for a finger. */
   --target: 44px;
 }
 
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   :root {
-    --bg: #15161a;
-    --bg-sidebar: #1c1d22;
-    --text: #e8eaed;
-    --text-muted: #a2a9b4;
-    --border: #2b2d33;
-    --accent: #5b8cf7;
-    --accent-fg: #0b0d10;
-    --danger: #ff9d92;
-    --mark-bg: #6b5a17;
-    --card-bg: #1c1d22;
-    --card-hover: #23252b;
-    --focus: #7aa2f9;
+    color-scheme: light;
+    --bg: #FBFBF9;
+    --panel: #F1F1EE;
+    --input-bg: #FFFFFF;
+    --border: #E1E1DC;
+    --border-subtle: #EDEDE9;
+    --text: #2A2D33;
+    --text-strong: #14161A;
+    --muted: #565D6B;
+    --dim: #5F6673;
+    --accent: #8A5A10;
+    --accent-fg: #FFFFFF;
+    --danger: #B42318;
+    --focus: #8A5A10;
+
+    --kind-thread: #8A5A10;
+    --kind-thread-edge: #DFD0B0;
+    --kind-video: #1B6141;
+    --kind-video-edge: #BFD8CB;
+    --kind-article: #1F4E8C;
+    --kind-article-edge: #C3D3E8;
+    --kind-tweet: #565D6B;
+    --kind-tweet-edge: #D9D9D4;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
@@ -59,87 +80,136 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--sans);
   font-size: 1rem;
   line-height: 1.5;
   background: var(--bg);
   color: var(--text);
 }
 
-/* One designed focus ring for everything, visible in both themes. The UA
-   default is a thin near-black ring that all but disappears on dark. */
 :focus-visible {
   outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  outline-offset: -2px;
+  border-radius: 4px;
 }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- top bar ---------- */
 
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.6rem 1.25rem;
+  gap: 12px;
+  padding: 6px 16px;
   border-bottom: 1px solid var(--border);
+  background: var(--bg);
 }
 
-.topbar h1 {
-  font-size: 1.1rem;
-  margin: 0;
+.wordmark {
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  flex-shrink: 0;
 }
 
-.topbar-actions {
+.search-wrap {
+  flex-grow: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 9px;
+  /* The input inside is itself a 44px touch target, and the wrapper adds
+     its own inset so the text never sits flush against the border. */
+  padding: 5px 13px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  transition: border-color var(--motion-fast) var(--ease);
+}
+
+.search-wrap:focus-within {
+  border-color: var(--accent);
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.search-icon { flex-shrink: 0; }
+
+#search-input {
+  flex-grow: 1;
   min-width: 0;
+  min-height: var(--target);
+  border: none;
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  color: var(--text);
+}
+
+#search-input::placeholder { color: var(--muted); }
+
+.kbd-hint,
+.statusbar kbd {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  flex-shrink: 0;
 }
 
 .sync-status {
-  font-size: 0.875rem;
-  color: var(--text-muted);
-  max-width: 40ch;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+  max-width: 34ch;
   text-align: right;
 }
 
-/* Errors must not read as ordinary status text. */
+/* Sits after the sync button, so a long result string grows into empty
+   space on the right instead of shoving the button around mid-sync. When
+   there is nothing to say it takes no room at all. */
+.sync-status:empty { display: none; }
+
 .sync-status.is-error,
-.status-line.is-error {
+.statusbar-info.is-error {
   color: var(--danger);
-  font-weight: 500;
 }
 
-button {
-  font: inherit;
-  cursor: pointer;
-}
-
-/* Every control clears the 44px finger target. */
-#sync-btn,
-.nav-item,
-.tag-filter,
-.wl-filter,
-.watch-toggle,
-.load-more,
-.open-link,
-#search-input {
-  min-height: var(--target);
-}
+button { font: inherit; cursor: pointer; }
 
 #sync-btn {
+  flex-shrink: 0;
+  min-height: var(--target);
+  min-width: var(--target);
+  padding: 0 16px;
   background: var(--accent);
   color: var(--accent-fg);
   border: none;
-  border-radius: 8px;
-  padding: 0.5rem 1rem;
-  white-space: nowrap;
-  transition: background var(--motion-fast) var(--ease), opacity var(--motion-fast) var(--ease);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition: opacity var(--motion-fast) var(--ease);
 }
 
-#sync-btn:hover:not(:disabled) { opacity: 0.9; }
-#sync-btn:disabled { opacity: 0.6; cursor: default; }
+#sync-btn:hover:not(:disabled) { opacity: 0.88; }
+#sync-btn:disabled { opacity: 0.55; cursor: default; }
 
-/* The layout fills whatever is left under the topbar, with no hardcoded
-   assumption about how tall the topbar happens to be. */
+/* ---------- shell ---------- */
+
 .layout {
   display: flex;
   flex: 1;
@@ -147,253 +217,306 @@ button {
 }
 
 .sidebar {
-  width: 220px;
+  width: 208px;
   flex-shrink: 0;
-  background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
-  padding: 0.75rem;
+  padding: 10px 9px;
   overflow-y: auto;
 }
 
+.rail-group { display: flex; flex-direction: column; gap: 2px; }
+
 .sidebar h2 {
+  margin: 18px 0 6px;
+  padding-left: 11px;
+  font-family: var(--mono);
   font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  margin: 1.25rem 0 0.35rem;
+  color: var(--dim);
 }
 
 .nav-item,
 .tag-filter {
   display: flex;
   align-items: center;
+  gap: 10px;
   width: 100%;
-  text-align: left;
-  background: none;
+  min-height: var(--target);
+  padding: 0 11px;
+  background: transparent;
   border: none;
-  border-radius: 8px;
-  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
   color: var(--text);
+  text-align: left;
   transition: background var(--motion-fast) var(--ease), color var(--motion-fast) var(--ease);
 }
 
-.nav-item { font-size: 0.9375rem; }
+.nav-item { font-size: 0.875rem; }
+.nav-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .tag-filter {
-  font-size: 0.875rem;
-  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  color: var(--muted);
 }
 
 .nav-item:hover,
-.tag-filter:hover { background: var(--card-hover); }
+.tag-filter:hover { background: var(--panel); color: var(--text-strong); }
 
-.nav-item[aria-current="page"],
+.nav-item[aria-current="page"] { background: var(--panel); color: var(--text-strong); }
+.nav-item[aria-current="page"] svg { color: var(--accent); }
+
 .tag-filter[aria-pressed="true"] {
   background: var(--accent);
   color: var(--accent-fg);
 }
 
-.tag-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.tag-filter[aria-pressed="true"] .count { color: var(--accent-fg); opacity: 0.75; }
+
+.count {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--dim);
 }
+
+.tag-list { list-style: none; margin: 0; padding: 0; }
 
 main {
   flex: 1;
-  padding: 1.25rem;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.field-label {
-  display: block;
+.view { display: flex; flex-direction: column; min-height: 0; }
+
+/* `display: flex` above would otherwise beat the `hidden` attribute's
+   UA `display: none`, leaving the inactive view on screen. */
+.view[hidden] { display: none; }
+
+/* ---------- row list ---------- */
+
+.col-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 7px 18px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.col-author { width: 128px; flex-shrink: 0; }
+.col-content { flex-grow: 1; min-width: 0; }
+.col-tags { width: 150px; flex-shrink: 0; }
+.col-date { width: 54px; flex-shrink: 0; text-align: right; }
+
+.rows { display: flex; flex-direction: column; }
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: var(--target);
+  padding: 0 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: inherit;
+  text-decoration: none;
+  transition: background var(--motion-fast) var(--ease);
+}
+
+.row:hover { background: var(--panel); }
+.row:focus-visible { background: var(--panel); outline-offset: -2px; }
+
+.row-author {
+  width: 128px;
+  flex-shrink: 0;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: var(--text-muted);
-  margin-bottom: 0.3rem;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-#search-input {
-  width: 100%;
-  max-width: 480px;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
+.row-main {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.row-text {
+  min-width: 0;
+  font-size: 0.8125rem;
   color: var(--text);
-  font-size: 1rem;
-  transition: border-color var(--motion-fast) var(--ease);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-#search-input:hover { border-color: var(--text-muted); }
+.row-text mark {
+  background: transparent;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.row-tags {
+  width: 150px;
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-date {
+  width: 54px;
+  flex-shrink: 0;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--dim);
+}
+
+.kind {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  border-radius: 3px;
+  padding: 2px 5px;
+  border: 1px solid;
+}
+
+.kind-thread  { color: var(--kind-thread);  border-color: var(--kind-thread-edge); }
+.kind-video   { color: var(--kind-video);   border-color: var(--kind-video-edge); }
+.kind-article { color: var(--kind-article); border-color: var(--kind-article-edge); }
+.kind-tweet   { color: var(--kind-tweet);   border-color: var(--kind-tweet-edge); }
+
+/* watch-later rows carry a poster frame; the dense list deliberately does not */
+.row-thumb {
+  width: 64px;
+  height: 36px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 3px;
+  background: var(--panel);
+}
+
+.watch-toggle {
+  flex-shrink: 0;
+  width: var(--target);
+  height: var(--target);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  transition: background var(--motion-fast) var(--ease), color var(--motion-fast) var(--ease);
+}
+
+.watch-toggle:hover { background: var(--panel); color: var(--text-strong); }
+.watch-toggle[aria-pressed="true"] { color: var(--kind-video); }
 
 .wl-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: 7px;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--border);
 }
 
 .wl-filter {
-  background: var(--bg-sidebar);
+  min-height: var(--target);
+  padding: 0 15px;
+  background: transparent;
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.35rem 1rem;
-  font-size: 0.875rem;
-  color: var(--text);
-  transition: background var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+  transition: background var(--motion-fast) var(--ease), color var(--motion-fast) var(--ease);
 }
 
-.wl-filter:hover { background: var(--card-hover); }
+.wl-filter:hover { background: var(--panel); color: var(--text-strong); }
 
 .wl-filter[aria-pressed="true"] {
-  background: var(--accent);
-  color: var(--accent-fg);
+  background: var(--panel);
   border-color: var(--accent);
-}
-
-.results {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-.card {
-  display: flex;
-  gap: 0.85rem;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.85rem;
-  transition: border-color var(--motion) var(--ease), background var(--motion) var(--ease);
-}
-
-.card:hover { border-color: var(--text-muted); }
-
-.card .thumb {
-  width: 96px;
-  height: 96px;
-  object-fit: cover;
-  border-radius: 8px;
-  flex-shrink: 0;
-  background: var(--bg-sidebar);
-}
-
-.card-body {
-  min-width: 0;
-  flex: 1;
-}
-
-.meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-  margin-bottom: 0.3rem;
-}
-
-.author {
-  color: var(--text);
-  font-weight: 600;
-}
-
-.badge {
-  background: var(--bg-sidebar);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 0.05rem 0.4rem;
-  font-size: 0.75rem;
-}
-
-.text {
-  margin: 0 0 0.5rem;
-  font-size: 0.9375rem;
-  line-height: 1.5;
-  overflow-wrap: break-word;
-}
-
-.text mark {
-  background: var(--mark-bg);
-  color: var(--text);
-  border-radius: 3px;
-  padding: 0 0.15rem;
-}
-
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-bottom: 0.5rem;
-}
-
-.tag-chip {
-  background: var(--bg-sidebar);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.1rem 0.6rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-.card-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.watch-toggle {
-  background: var(--bg-sidebar);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.35rem 0.9rem;
-  font-size: 0.875rem;
-  color: var(--text);
-  transition: background var(--motion-fast) var(--ease);
-}
-
-.watch-toggle:hover { background: var(--card-hover); }
-
-.open-link {
-  display: inline-flex;
-  align-items: center;
-  font-size: 0.875rem;
-  color: var(--accent);
-  text-decoration: none;
-  transition: text-decoration-color var(--motion-fast) var(--ease);
-}
-
-.open-link:hover { text-decoration: underline; }
-
-.status-line {
-  color: var(--text-muted);
-  font-size: 0.875rem;
+  color: var(--text-strong);
 }
 
 .load-more {
-  display: block;
-  margin: 1.5rem auto 0;
-  padding: 0.55rem 1.5rem;
-  background: var(--card-bg);
-  color: var(--text);
+  align-self: center;
+  margin: 16px 0;
+  min-height: var(--target);
+  padding: 0 20px;
+  background: transparent;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  transition: background var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+  transition: background var(--motion-fast) var(--ease), color var(--motion-fast) var(--ease);
 }
 
-.load-more:hover {
-  background: var(--card-hover);
-  border-color: var(--text-muted);
-}
-
+.load-more:hover { background: var(--panel); color: var(--text-strong); }
 .load-more[hidden] { display: none; }
 
-/* Below this width the fixed 220px sidebar leaves too little for a card,
-   so the shell stacks: navigation becomes a row across the top and the
-   tag list becomes a wrapping cloud instead of a tall column. */
+.empty {
+  padding: 34px 18px;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  color: var(--dim);
+}
+
+.empty.is-error { color: var(--danger); }
+
+/* ---------- status bar ---------- */
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 7px 16px;
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--dim);
+  background: var(--bg);
+}
+
+.shortcuts { display: flex; gap: 16px; flex-wrap: wrap; }
+.shortcut { display: inline-flex; align-items: center; gap: 5px; }
+
+.result-count {
+  margin: 0 0 0 auto;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--text);
+}
+
+.result-count.is-error { color: var(--danger); }
+.statusbar-info { text-align: right; }
+
+/* ---------- narrow screens ----------
+   The table columns cannot survive a phone, so each row becomes a stacked
+   block and the rail turns into a horizontal strip. */
 @media (max-width: 900px) {
   .layout { flex-direction: column; }
 
@@ -404,47 +527,59 @@ main {
     overflow-y: visible;
   }
 
-  .sidebar h2 { margin-top: 0.85rem; }
-
-  .sidebar-nav {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .nav-item {
-    width: auto;
-    flex: 1;
-    justify-content: center;
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-  }
+  .rail-group { flex-direction: row; gap: 7px; }
+  .nav-item { flex: 1; justify-content: center; border: 1px solid var(--border); }
+  .sidebar h2 { margin-top: 12px; padding-left: 2px; }
 
   .tag-list {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
-    /* Two full rows of 44px chips plus the gap, so the cap lands on a row
-       boundary instead of slicing the third row in half. */
+    gap: 6px;
     max-height: 5.9rem;
     overflow-y: auto;
   }
 
-  .tag-filter {
-    width: auto;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 0.35rem 0.9rem;
-    background: var(--card-bg);
+  .tag-filter { width: auto; border: 1px solid var(--border); }
+
+  .col-head { display: none; }
+
+  /* Rows become three stacked lines. No CSS `order` anywhere: the visual
+     sequence is the DOM sequence, so what a screen reader announces and
+     what the eye reads cannot drift apart.
+       line 1  thumb + author
+       line 2  type badge + text
+       line 3  tags, date, watch toggle */
+  .row {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px 10px;
+    padding: 11px 16px;
   }
 
-  main { padding: 1rem; }
+  .row-author { width: auto; flex-grow: 1; }
+  .row-main { width: 100%; flex-grow: 0; align-items: flex-start; }
+  .row-text { white-space: normal; overflow: visible; line-height: 1.5; }
+  .row-tags { width: auto; flex-grow: 1; }
+  .row-date { width: auto; }
+
+  .statusbar .shortcuts { display: none; }
+  .result-count { margin-left: 0; text-align: left; }
 }
 
 @media (max-width: 480px) {
-  .topbar { padding: 0.6rem 1rem; }
-  .sync-status { max-width: 22ch; font-size: 0.8125rem; }
-  main { padding: 0.85rem; }
-  .card { padding: 0.75rem; gap: 0.7rem; }
-  .card .thumb { width: 72px; height: 72px; }
-  #search-input { max-width: none; }
+  /* Two lines, again in DOM order and with no `order` property:
+       line 1  wordmark + search
+       line 2  sync status + sync button */
+  /* Wordmark, search and sync share line 1; the sync status, when there is
+     one, wraps to line 2. DOM order throughout, no `order` property. */
+  .topbar { flex-wrap: wrap; padding: 8px 12px; }
+  /* flex-basis 0 so the search box does not demand its content width and
+     push the sync button onto a line of its own; it grows into whatever is
+     left after the wordmark and the button. */
+  .search-wrap { flex: 1 1 0; min-width: 130px; }
+  .sync-status { width: 100%; max-width: none; text-align: left; }
+  .kbd-hint { display: none; }
+  main, .row { padding-left: 12px; padding-right: 12px; }
+  .row { padding-left: 12px; padding-right: 12px; }
+  .wl-filters { padding: 9px 12px; }
 }

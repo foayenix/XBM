@@ -155,6 +155,15 @@ def api_search(
         conn.close()
 
 
+@app.get("/api/stats")
+def api_stats():
+    conn = db.get_connection()
+    try:
+        return queries.get_stats(conn)
+    finally:
+        conn.close()
+
+
 @app.get("/api/tags")
 def api_tags():
     conn = db.get_connection()

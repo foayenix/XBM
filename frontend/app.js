@@ -3,10 +3,12 @@
 // textContent/createElement instead of innerHTML, so nothing in a bookmark
 // can execute as HTML/script in this page.
 
-const SNIPPET_START = "";
-const SNIPPET_END = "";
+const SNIPPET_START = "\x01";
+const SNIPPET_END = "\x02";
 
 const PAGE_SIZE = 30;
+
+const KIND_LABEL = { thread: "THR", video: "VID", article: "ART", tweet: "TWT" };
 
 const state = {
   q: "",
@@ -14,10 +16,11 @@ const state = {
   wlStatus: "unwatched",
   offset: 0,
   loading: false,
+  view: "search",
 };
 
-// Status text is the only feedback channel in this UI, so an error must
-// not look identical to "75 bookmarks". `is-error` recolours it, and the
+// Status text is the only feedback channel in this UI, so an error must not
+// look identical to "75 bookmarks". `is-error` recolours it, and the
 // aria-live region on these elements announces either kind.
 function setStatus(el, message, { isError = false } = {}) {
   el.textContent = message;
@@ -54,13 +57,34 @@ function renderSnippetInto(el, text) {
   }
 }
 
-function buildCard(bookmark, opts = {}) {
-  const card = document.createElement("article");
-  card.className = "card";
+function eyeIcon(watched) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", "16");
+  svg.setAttribute("height", "16");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", watched ? "M20 6L9 17l-5-5" : "M12 5v14M5 12h14");
+  svg.appendChild(path);
+  return svg;
+}
 
-  if (bookmark.thumbnail) {
+// One row. The whole row is the link to X, so Enter on a focused row opens
+// it natively and `o` has something real to activate.
+function buildRow(bookmark, opts = {}) {
+  const row = document.createElement("a");
+  row.className = "row";
+  row.href = `https://x.com/${bookmark.author_username}/status/${bookmark.id}`;
+  row.target = "_blank";
+  row.rel = "noopener noreferrer";
+  row.dataset.id = String(bookmark.id);
+
+  if (opts.showThumb && bookmark.thumbnail) {
     const img = document.createElement("img");
-    img.className = "thumb";
+    img.className = "row-thumb";
     img.src = bookmark.thumbnail;
     img.alt = "";
     img.loading = "lazy";
@@ -68,100 +92,121 @@ function buildCard(bookmark, opts = {}) {
     // media 404s eventually too. Drop the element rather than showing the
     // browser's broken-image icon.
     img.addEventListener("error", () => img.remove());
-    card.appendChild(img);
+    row.appendChild(img);
   }
-
-  const body = document.createElement("div");
-  body.className = "card-body";
-
-  const meta = document.createElement("div");
-  meta.className = "meta";
 
   const author = document.createElement("span");
-  author.className = "author";
+  author.className = "row-author";
   author.textContent = bookmark.author_name || bookmark.author_username;
-  meta.appendChild(author);
+  row.appendChild(author);
 
-  const handle = document.createElement("span");
-  handle.textContent = "@" + bookmark.author_username;
-  meta.appendChild(handle);
+  const mainEl = document.createElement("span");
+  mainEl.className = "row-main";
 
-  if (bookmark.is_thread) {
-    const badge = document.createElement("span");
-    badge.className = "badge";
-    badge.textContent = "thread";
-    meta.appendChild(badge);
-  }
+  const kind = bookmark.kind || "tweet";
+  const badge = document.createElement("span");
+  badge.className = `kind kind-${kind}`;
+  badge.textContent = KIND_LABEL[kind] || KIND_LABEL.tweet;
+  // The three-letter badge is an abbreviation; give it the full word too.
+  badge.title = kind;
+  mainEl.appendChild(badge);
+
+  const textEl = document.createElement("span");
+  textEl.className = "row-text";
+  renderSnippetInto(textEl, bookmark.snippet || bookmark.text || "");
+  mainEl.appendChild(textEl);
+  row.appendChild(mainEl);
+
+  const tagsEl = document.createElement("span");
+  tagsEl.className = "row-tags";
+  tagsEl.textContent = (bookmark.tags || []).join(" ");
+  row.appendChild(tagsEl);
 
   const date = document.createElement("span");
-  date.textContent = new Date(bookmark.created_at).toLocaleDateString();
-  meta.appendChild(date);
-
-  body.appendChild(meta);
-
-  const textEl = document.createElement("p");
-  textEl.className = "text";
-  renderSnippetInto(textEl, bookmark.snippet || bookmark.text || "");
-  body.appendChild(textEl);
-
-  if (bookmark.tags && bookmark.tags.length) {
-    const tagsEl = document.createElement("div");
-    tagsEl.className = "tags";
-    for (const t of bookmark.tags) {
-      const chip = document.createElement("span");
-      chip.className = "tag-chip";
-      chip.textContent = t;
-      tagsEl.appendChild(chip);
-    }
-    body.appendChild(tagsEl);
-  }
-
-  const actions = document.createElement("div");
-  actions.className = "card-actions";
+  date.className = "row-date";
+  const d = new Date(bookmark.created_at);
+  date.textContent = d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  row.appendChild(date);
 
   if (opts.showWatchToggle) {
+    const watched = bookmark.watch_status === "watched";
     const btn = document.createElement("button");
     btn.className = "watch-toggle";
     btn.type = "button";
-    const watched = bookmark.watch_status === "watched";
-    btn.textContent = watched ? "Mark unwatched" : "Mark watched";
     btn.setAttribute("aria-pressed", String(watched));
-    btn.addEventListener("click", async () => {
+    btn.setAttribute("aria-label", watched ? "Mark as unwatched" : "Mark as watched");
+    btn.appendChild(eyeIcon(watched));
+    btn.addEventListener("click", async (e) => {
+      // The row is a link; a click on its toggle must not also navigate.
+      e.preventDefault();
+      e.stopPropagation();
       btn.disabled = true;
-      await fetch(`/api/watch-later/${bookmark.id}/toggle`, { method: "POST" });
+      await toggleWatchLater(bookmark.id);
       opts.onToggle?.();
     });
-    actions.appendChild(btn);
+    row.appendChild(btn);
   }
 
-  const link = document.createElement("a");
-  link.href = `https://x.com/${bookmark.author_username}/status/${bookmark.id}`;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  link.className = "open-link";
-  link.textContent = "Open on X \u2192";
-  actions.appendChild(link);
-
-  body.appendChild(actions);
-  card.appendChild(body);
-  return card;
+  return row;
 }
 
-function renderCards(container, items, opts = {}) {
+function renderRows(container, items, opts = {}) {
   if (!opts.append) container.textContent = "";
-  for (const b of items) {
-    container.appendChild(buildCard(b, opts));
+  for (const b of items) container.appendChild(buildRow(b, opts));
+}
+
+function showEmpty(container, message, { isError = false } = {}) {
+  container.textContent = "";
+  const p = document.createElement("p");
+  p.className = "empty" + (isError ? " is-error" : "");
+  p.textContent = message;
+  container.appendChild(p);
+}
+
+async function toggleWatchLater(id) {
+  await fetch(`/api/watch-later/${id}/toggle`, { method: "POST" });
+  loadStats();
+}
+
+// --- data loading ---------------------------------------------------------
+
+async function loadStats() {
+  try {
+    const res = await fetch("/api/stats");
+    if (!res.ok) return;
+    const s = await res.json();
+    document.getElementById("count-all").textContent = s.bookmarks;
+    document.getElementById("count-watch").textContent = s.watch_later_unwatched;
+
+    // The counts already sit in the rail and in the live result count, so
+    // the status bar only carries what nothing else shows.
+    const info = document.getElementById("statusbar-info");
+    info.textContent = s.last_synced_at
+      ? `synced ${relativeTime(s.last_synced_at)}`
+      : "never synced";
+  } catch {
+    /* the status bar is decoration; never break the page over it */
   }
 }
 
-// `append` distinguishes "Load more" (keep what is on screen and add the
-// next page) from a new search (start over at offset 0).
+function relativeTime(iso) {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "recently";
+  const mins = Math.round((Date.now() - then) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
 async function runSearch({ append = false } = {}) {
   if (state.loading) return;
   state.loading = true;
 
   const moreBtn = document.getElementById("load-more");
   const statusEl = document.getElementById("results-status");
+  const container = document.getElementById("results");
 
   if (!append) state.offset = 0;
 
@@ -171,43 +216,40 @@ async function runSearch({ append = false } = {}) {
   params.set("limit", String(PAGE_SIZE));
   params.set("offset", String(state.offset));
 
-  if (!append) setStatus(statusEl, "Searching\u2026");
-
   try {
     const res = await fetch("/api/search?" + params.toString());
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Search failed");
 
-    renderCards(document.getElementById("results"), data.results, { append });
+    if (!append && data.total === 0) {
+      showEmpty(container, state.q || state.tags.size ? "no matches" : "no bookmarks yet — hit sync");
+      moreBtn.hidden = true;
+      setStatus(statusEl, "No bookmarks");
+      return;
+    }
+
+    renderRows(container, data.results, { append });
     state.offset += data.results.length;
 
     const shown = state.offset;
-    const total = data.total;
     setStatus(
       statusEl,
-      total === 0
-        ? "No bookmarks"
-        : shown < total
-          ? `Showing ${shown} of ${total} bookmarks`
-          : total === 1
-            ? "1 bookmark"
-            : `${total} bookmarks`
+      shown < data.total
+        ? `Showing ${shown} of ${data.total} bookmarks`
+        : data.total === 1
+          ? "1 bookmark"
+          : `${data.total} bookmarks`
     );
 
     moreBtn.hidden = !data.has_more;
-    moreBtn.textContent = `Load ${Math.min(PAGE_SIZE, total - shown)} more`;
+    moreBtn.textContent = `load ${Math.min(PAGE_SIZE, data.total - shown)} more`;
   } catch (err) {
+    showEmpty(container, "Error: " + err.message, { isError: true });
     setStatus(statusEl, "Error: " + err.message, { isError: true });
     moreBtn.hidden = true;
   } finally {
     state.loading = false;
   }
-}
-
-function setupLoadMore() {
-  document.getElementById("load-more").addEventListener("click", () => {
-    runSearch({ append: true });
-  });
 }
 
 async function loadTags() {
@@ -222,13 +264,20 @@ async function loadTags() {
     btn.type = "button";
     btn.className = "tag-filter";
     btn.setAttribute("aria-pressed", String(state.tags.has(t.name)));
-    btn.textContent = `${t.name} (${t.count})`;
+
+    const label = document.createElement("span");
+    label.className = "nav-label";
+    label.textContent = t.name;
+    btn.appendChild(label);
+
+    const count = document.createElement("span");
+    count.className = "count";
+    count.textContent = t.count;
+    btn.appendChild(count);
+
     btn.addEventListener("click", () => {
-      if (state.tags.has(t.name)) {
-        state.tags.delete(t.name);
-      } else {
-        state.tags.add(t.name);
-      }
+      if (state.tags.has(t.name)) state.tags.delete(t.name);
+      else state.tags.add(t.name);
       loadTags();
       runSearch();
     });
@@ -238,19 +287,111 @@ async function loadTags() {
 }
 
 async function loadWatchLater() {
+  const container = document.getElementById("watch-later-results");
+  const statusEl = document.getElementById("watch-later-status");
+
   const params = new URLSearchParams();
   if (state.wlStatus) params.set("status", state.wlStatus);
 
   const res = await fetch("/api/watch-later?" + params.toString());
   const items = await res.json();
 
-  renderCards(document.getElementById("watch-later-results"), items, {
+  if (!items.length) {
+    showEmpty(container, "nothing queued");
+    setStatus(statusEl, "0 videos");
+    setStatus(document.getElementById("results-status"), "0 videos");
+    return;
+  }
+
+  renderRows(container, items, {
     showWatchToggle: true,
+    showThumb: true,
     onToggle: loadWatchLater,
   });
-  const statusEl = document.getElementById("watch-later-status");
-  setStatus(statusEl, items.length === 1 ? "1 video" : `${items.length} videos`);
+  const label = items.length === 1 ? "1 video" : `${items.length} videos`;
+  setStatus(statusEl, label);
+  setStatus(document.getElementById("results-status"), label);
 }
+
+// --- keyboard -------------------------------------------------------------
+
+function visibleRows() {
+  const container =
+    state.view === "search"
+      ? document.getElementById("results")
+      : document.getElementById("watch-later-results");
+  return [...container.querySelectorAll(".row")];
+}
+
+function moveSelection(delta) {
+  const rows = visibleRows();
+  if (!rows.length) return;
+  const current = rows.indexOf(document.activeElement.closest?.(".row") ?? document.activeElement);
+  let next = current === -1 ? (delta > 0 ? 0 : rows.length - 1) : current + delta;
+  next = Math.max(0, Math.min(rows.length - 1, next));
+  rows[next].focus();
+  rows[next].scrollIntoView({ block: "nearest" });
+}
+
+function isTyping(target) {
+  return target instanceof HTMLElement &&
+    (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+}
+
+function setupKeyboard() {
+  const searchInput = document.getElementById("search-input");
+
+  document.addEventListener("keydown", (e) => {
+    // Cmd/Ctrl-K reaches the search box from anywhere, including the box.
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+      return;
+    }
+
+    if (isTyping(e.target)) {
+      if (e.key === "Escape") searchInput.blur();
+      return;
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    switch (e.key) {
+      case "j":
+        e.preventDefault();
+        moveSelection(1);
+        break;
+      case "k":
+        e.preventDefault();
+        moveSelection(-1);
+        break;
+      case "/":
+        e.preventDefault();
+        searchInput.focus();
+        break;
+      case "o": {
+        const row = document.activeElement.closest?.(".row");
+        if (row) {
+          e.preventDefault();
+          window.open(row.href, "_blank", "noopener");
+        }
+        break;
+      }
+      case "w": {
+        const row = document.activeElement.closest?.(".row");
+        if (!row) break;
+        e.preventDefault();
+        const toggle = row.querySelector(".watch-toggle");
+        if (toggle) toggle.click();
+        break;
+      }
+      default:
+        break;
+    }
+  });
+}
+
+// --- wiring ---------------------------------------------------------------
 
 function setupViewSwitching() {
   document.querySelectorAll(".nav-item").forEach((btn) => {
@@ -258,6 +399,7 @@ function setupViewSwitching() {
       document.querySelectorAll(".nav-item").forEach((b) => b.removeAttribute("aria-current"));
       btn.setAttribute("aria-current", "page");
       const view = btn.dataset.view;
+      state.view = view;
       document.getElementById("search-view").hidden = view !== "search";
       document.getElementById("watch-later-view").hidden = view !== "watch-later";
       if (view === "watch-later") loadWatchLater();
@@ -286,6 +428,12 @@ function setupSearchInput() {
   );
 }
 
+function setupLoadMore() {
+  document.getElementById("load-more").addEventListener("click", () => {
+    runSearch({ append: true });
+  });
+}
+
 function setupSyncButton() {
   const btn = document.getElementById("sync-btn");
   const statusEl = document.getElementById("sync-status");
@@ -293,7 +441,7 @@ function setupSyncButton() {
   btn.addEventListener("click", async () => {
     btn.disabled = true;
     try {
-      setStatus(statusEl, "Syncing bookmarks\u2026");
+      setStatus(statusEl, "syncing…");
       const syncRes = await fetch("/api/sync", { method: "POST" });
       const syncData = await syncRes.json();
       // 409 means the background scheduler (or another tab) already has a
@@ -301,7 +449,7 @@ function setupSyncButton() {
       if (syncRes.status === 409) throw new Error(syncData.detail || "A sync is already running.");
       if (!syncRes.ok) throw new Error(syncData.detail || "Sync failed");
 
-      setStatus(statusEl, "Enriching\u2026");
+      setStatus(statusEl, "enriching…");
       const enrichRes = await fetch("/api/enrich", { method: "POST" });
       const enrichData = await enrichRes.json();
       if (enrichRes.status === 409) throw new Error(enrichData.detail || "An enrichment run is already in progress.");
@@ -309,14 +457,12 @@ function setupSyncButton() {
 
       setStatus(
         statusEl,
-        `Synced ${syncData.new} new, ${syncData.updated} updated. ` +
-          `Enriched ${enrichData.linked_content_done} links, tagged ${enrichData.bookmarks_tagged} bookmarks.`
+        `+${syncData.new} new, ${syncData.updated} updated, ${enrichData.bookmarks_tagged} tagged`
       );
 
-      await loadTags();
-      await runSearch();
+      await Promise.all([loadTags(), runSearch(), loadStats()]);
     } catch (err) {
-      setStatus(statusEl, "Error: " + err.message, { isError: true });
+      setStatus(statusEl, err.message, { isError: true });
     } finally {
       btn.disabled = false;
     }
@@ -328,5 +474,7 @@ setupWatchLaterFilters();
 setupSearchInput();
 setupSyncButton();
 setupLoadMore();
+setupKeyboard();
 loadTags();
 runSearch();
+loadStats();

@@ -5,48 +5,80 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>XBM - X Bookmarks</title>
   <!-- Inline so the browser stops requesting /favicon.ico and logging a 404. -->
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%232563eb' d='M4 1h8a1 1 0 0 1 1 1v13l-5-3.5L3 15V2a1 1 0 0 1 1-1z'/></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%23E3A33C' d='M4 1h8a1 1 0 0 1 1 1v13l-5-3.5L3 15V2a1 1 0 0 1 1-1z'/></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <header class="topbar">
-    <h1>XBM</h1>
-    <div class="topbar-actions">
-      <span id="sync-status" class="sync-status" role="status" aria-live="polite"></span>
-      <button id="sync-btn">Sync now</button>
+    <div class="wordmark">XBM</div>
+
+    <div class="search-wrap">
+      <label class="sr-only" for="search-input">Search bookmarks</label>
+      <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input id="search-input" type="search" placeholder="Filter by text, author, tag&hellip;" autocomplete="off" />
+      <kbd class="kbd-hint" aria-hidden="true">/</kbd>
     </div>
+
+    <button id="sync-btn" type="button">sync</button>
+    <span id="sync-status" class="sync-status" role="status" aria-live="polite"></span>
   </header>
 
   <div class="layout">
     <nav class="sidebar" aria-label="Views and tag filters">
-      <div class="sidebar-nav">
-        <button class="nav-item" data-view="search" type="button" aria-current="page">All bookmarks</button>
-        <button class="nav-item" data-view="watch-later" type="button">Watch later</button>
+      <div class="rail-group">
+        <button class="nav-item" data-view="search" type="button" aria-current="page">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h12a1 1 0 011 1v17l-7-5-7 5V4a1 1 0 011-1z"/></svg>
+          <span class="nav-label">All bookmarks</span>
+          <span class="count" id="count-all"></span>
+        </button>
+        <button class="nav-item" data-view="watch-later" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8l6 4-6 4z"/></svg>
+          <span class="nav-label">Watch later</span>
+          <span class="count" id="count-watch"></span>
+        </button>
       </div>
+
       <h2 id="tags-heading">Tags</h2>
       <ul id="tag-list" class="tag-list" aria-labelledby="tags-heading"></ul>
     </nav>
 
     <main>
       <section id="search-view" class="view" aria-label="All bookmarks">
-        <label class="field-label" for="search-input">Search bookmarks</label>
-        <input id="search-input" type="search" placeholder="Title, author, tag, article text..." autocomplete="off" />
-        <div id="results" class="results"></div>
+        <div class="col-head" aria-hidden="true">
+          <span class="col-author">Author</span>
+          <span class="col-content">Content</span>
+          <span class="col-tags">Tags</span>
+          <span class="col-date">Date</span>
+        </div>
+        <div id="results" class="rows"></div>
         <button id="load-more" class="load-more" type="button" hidden>Load more</button>
-        <p id="results-status" class="status-line" role="status" aria-live="polite"></p>
       </section>
 
       <section id="watch-later-view" class="view" aria-label="Watch later" hidden>
         <div class="wl-filters" role="group" aria-label="Filter by watched state">
-          <button class="wl-filter" data-status="unwatched" type="button" aria-pressed="true">Unwatched</button>
-          <button class="wl-filter" data-status="watched" type="button" aria-pressed="false">Watched</button>
-          <button class="wl-filter" data-status="" type="button" aria-pressed="false">All</button>
+          <button class="wl-filter" data-status="unwatched" type="button" aria-pressed="true">unwatched</button>
+          <button class="wl-filter" data-status="watched" type="button" aria-pressed="false">watched</button>
+          <button class="wl-filter" data-status="" type="button" aria-pressed="false">all</button>
         </div>
-        <div id="watch-later-results" class="results"></div>
-        <p id="watch-later-status" class="status-line" role="status" aria-live="polite"></p>
+        <div id="watch-later-results" class="rows"></div>
       </section>
     </main>
   </div>
+
+  <footer class="statusbar">
+    <span class="shortcuts">
+      <span class="shortcut"><kbd>j</kbd><kbd>k</kbd> move</span>
+      <span class="shortcut"><kbd>o</kbd> open</span>
+      <span class="shortcut"><kbd>w</kbd> watch later</span>
+      <span class="shortcut"><kbd>/</kbd> search</span>
+    </span>
+    <span id="results-status" class="result-count" role="status" aria-live="polite"></span>
+    <span id="watch-later-status" class="sr-only" role="status" aria-live="polite"></span>
+    <span id="statusbar-info" class="statusbar-info"></span>
+  </footer>
 
   <script src="/static/app.js"></script>
 </body>

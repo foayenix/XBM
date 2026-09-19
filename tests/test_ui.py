@@ -188,16 +188,39 @@ def test_no_horizontal_scroll_at_any_width(page, width, label):
 
 
 @pytest.mark.parametrize("width,label", VIEWPORTS)
-def test_cards_stay_readable_at_any_width(page, width, label):
-    """A card squeezed under ~200px wraps body text one character per line."""
+def test_rows_stay_readable_at_any_width(page, width, label):
+    """A row squeezed under ~200px wraps body text one character per line."""
     page.set_viewport_size({"width": width, "height": 850})
     page.wait_for_timeout(250)
-    card_width = page.evaluate(
-        "() => document.querySelector('.card').getBoundingClientRect().width"
+    row_width = page.evaluate(
+        "() => document.querySelector('.row').getBoundingClientRect().width"
     )
-    assert card_width >= min(280, width - 80), (
-        f"{label} ({width}px): card is only {card_width:.0f}px wide"
+    assert row_width >= min(280, width - 80), (
+        f"{label} ({width}px): row is only {row_width:.0f}px wide"
     )
+
+
+@pytest.mark.parametrize("selector", [".row", ".topbar"])
+@pytest.mark.parametrize("width", [375, 430, 1280])
+def test_visual_order_matches_dom_order(page, selector, width):
+    """CSS `order` desyncs what is read aloud from what is seen, and makes
+    Tab jump around the screen. Neither container uses it."""
+    page.set_viewport_size({"width": width, "height": 850})
+    page.wait_for_timeout(300)
+    mismatches = page.evaluate("""(sel) => {
+      const box = document.querySelector(sel);
+      const parts = [...box.children].filter(c => c.offsetParent !== null);
+      // Items on one line rarely share an exact `top` — they are centred and
+      // have different heights — so "same line" means their vertical ranges
+      // overlap, and only then does left-to-right decide.
+      const visual = [...parts].sort((a, b) => {
+        const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+        const sameLine = ra.bottom > rb.top + 1 && rb.bottom > ra.top + 1;
+        return sameLine ? ra.left - rb.left : ra.top - rb.top;
+      });
+      return parts.map((p, i) => p === visual[i] ? null : (p.className || p.tagName)).filter(Boolean);
+    }""", selector)
+    assert not mismatches, f"{selector} at {width}px renders out of DOM order: {mismatches}"
 
 
 def test_the_sidebar_stops_being_a_fixed_column_on_phones(page):
@@ -220,8 +243,7 @@ def test_every_control_meets_the_touch_target_minimum(page):
 
 
 def test_watch_later_controls_also_meet_the_minimum(page):
-    page.click(".nav-item[data-view='watch-later']")
-    page.wait_for_timeout(400)
+    open_watch_later(page)
     too_small = [t for t in page.evaluate(TARGETS_JS) if t["h"] < MIN_TARGET or t["w"] < MIN_TARGET]
     assert not too_small, "controls under 44x44: " + ", ".join(
         f"{t['sel']} {t['text']!r} {t['w']:.0f}x{t['h']:.0f}" for t in too_small
@@ -295,6 +317,28 @@ def test_toggle_state_is_exposed_to_assistive_tech(page):
     assert counts["tagsWithState"] == counts["tagsTotal"] > 0
 
 
+def test_the_inactive_view_is_actually_hidden(page):
+    """`display: flex` on .view can override the hidden attribute's
+    `display: none`, leaving both views stacked on screen at once."""
+    assert page.locator("#watch-later-view").is_visible() is False
+    assert page.locator(".wl-filters").is_visible() is False
+
+    page.click(".nav-item[data-view='watch-later']")
+    page.wait_for_timeout(400)
+    assert page.locator("#search-view").is_visible() is False
+    assert page.locator("#watch-later-view").is_visible() is True
+
+
+def test_only_one_view_worth_of_rows_is_visible(page):
+    page.wait_for_timeout(300)
+    visible = page.evaluate(
+        """() => [...document.querySelectorAll('.row')]
+             .filter(r => r.offsetParent !== null).length"""
+    )
+    total = page.evaluate("() => document.querySelectorAll('.row').length")
+    assert visible == total, f"{total - visible} rows from the inactive view are on screen"
+
+
 def test_aria_current_follows_the_active_view(page):
     page.click(".nav-item[data-view='watch-later']")
     page.wait_for_timeout(300)
@@ -343,10 +387,10 @@ def test_keyboard_focus_is_clearly_visible(page):
 
 def test_state_changes_are_not_instant(page):
     duration = page.evaluate(
-        "() => getComputedStyle(document.querySelector('.card')).transitionDuration"
+        "() => getComputedStyle(document.querySelector('.row')).transitionDuration"
     )
     assert any(float(d.rstrip("s")) > 0 for d in duration.split(", ")), (
-        "no transition on .card - state changes snap instantly"
+        "no transition on .row - state changes snap instantly"
     )
 
 
@@ -356,7 +400,7 @@ def test_reduced_motion_is_respected(browser, live_server):
         p.goto(live_server, wait_until="networkidle")
         p.wait_for_timeout(200)
         duration = p.evaluate(
-            "() => getComputedStyle(document.querySelector('.card')).transitionDuration"
+            "() => getComputedStyle(document.querySelector('.row')).transitionDuration"
         )
         assert all(float(d.rstrip("s")) < 0.01 for d in duration.split(", ")), duration
     finally:
@@ -374,9 +418,140 @@ def test_a_dead_thumbnail_leaves_no_broken_image(page):
     assert broken == 0, f"{broken} broken-image icon(s) visible"
 
 
-def test_errors_do_not_look_like_ordinary_status(page):
-    normal = page.evaluate("""() => { const el=document.getElementById('results-status');
-        setStatus(el, '75 bookmarks'); return getComputedStyle(el).color; }""")
-    error = page.evaluate("""() => { const el=document.getElementById('results-status');
-        setStatus(el, 'Error: rate limited', {isError: true}); return getComputedStyle(el).color; }""")
-    assert normal != error, "error and normal status render identically"
+@pytest.mark.parametrize("element_id", ["results-status", "sync-status"])
+def test_errors_do_not_look_like_ordinary_status(page, element_id):
+    normal = page.evaluate("""(id) => { const el=document.getElementById(id);
+        setStatus(el, '75 bookmarks'); return getComputedStyle(el).color; }""", element_id)
+    error = page.evaluate("""(id) => { const el=document.getElementById(id);
+        setStatus(el, 'Error: rate limited', {isError: true}); return getComputedStyle(el).color; }""", element_id)
+    assert normal != error, f"#{element_id}: error and normal status render identically"
+
+
+def test_a_failed_search_says_so_in_the_list(page):
+    """The empty/error state is the visible channel, not just aria-live."""
+    colour = page.evaluate("""() => {
+      const c = document.getElementById('results');
+      showEmpty(c, 'Error: rate limited', {isError: true});
+      return getComputedStyle(c.querySelector('.empty')).color;
+    }""")
+    plain = page.evaluate("""() => {
+      const c = document.getElementById('results');
+      showEmpty(c, 'no matches');
+      return getComputedStyle(c.querySelector('.empty')).color;
+    }""")
+    assert colour != plain
+
+
+# --- the Console direction's own promises --------------------------------
+
+def open_watch_later(page):
+    """Open the queue on the `all` filter.
+
+    The module-scoped database is shared, so a test that toggles an item
+    would otherwise empty the default `unwatched` view for whatever runs
+    next. `all` is stable whichever way earlier tests left things.
+    """
+    page.click(".nav-item[data-view='watch-later']")
+    page.wait_for_timeout(300)
+    page.click(".wl-filter[data-status='']")
+    page.wait_for_timeout(500)
+
+
+def test_every_row_carries_a_content_type_badge(page):
+    kinds = page.evaluate(
+        """() => [...document.querySelectorAll('.row')].map(r => {
+             const b = r.querySelector('.kind');
+             return b ? b.textContent.trim() : null; })"""
+    )
+    assert kinds and all(k in ("THR", "VID", "ART", "TWT") for k in kinds), kinds
+
+
+def test_the_rail_shows_live_counts(page):
+    counts = page.evaluate(
+        """() => ({all: document.getElementById('count-all').textContent,
+                  watch: document.getElementById('count-watch').textContent})"""
+    )
+    assert counts["all"].isdigit() and int(counts["all"]) > 0
+    assert counts["watch"].isdigit()
+
+
+def test_slash_focuses_the_search_box(page):
+    page.keyboard.press("/")
+    page.wait_for_timeout(120)
+    assert page.evaluate("() => document.activeElement.id") == "search-input"
+
+
+def test_typing_a_slash_in_the_box_does_not_hijack_it(page):
+    page.click("#search-input")
+    page.keyboard.type("a/b")
+    page.wait_for_timeout(120)
+    assert page.evaluate("() => document.getElementById('search-input').value") == "a/b"
+
+
+def test_ctrl_k_reaches_the_search_box(page):
+    page.keyboard.press("Control+k")
+    page.wait_for_timeout(120)
+    assert page.evaluate("() => document.activeElement.id") == "search-input"
+
+
+def test_j_and_k_walk_the_rows(page):
+    page.keyboard.press("j")
+    page.wait_for_timeout(120)
+    first = page.evaluate("() => document.activeElement.dataset.id")
+    assert first, "j did not land on a row"
+
+    page.keyboard.press("j")
+    page.wait_for_timeout(120)
+    second = page.evaluate("() => document.activeElement.dataset.id")
+    assert second and second != first, "j did not advance"
+
+    page.keyboard.press("k")
+    page.wait_for_timeout(120)
+    assert page.evaluate("() => document.activeElement.dataset.id") == first, "k did not go back"
+
+
+def test_j_stops_at_the_end_instead_of_wrapping_or_erroring(page):
+    for _ in range(12):
+        page.keyboard.press("j")
+    page.wait_for_timeout(200)
+    assert page.evaluate("() => !!document.activeElement.dataset.id")
+
+
+def test_shortcuts_do_not_fire_while_typing(page):
+    page.click("#search-input")
+    page.keyboard.type("jkw")
+    page.wait_for_timeout(120)
+    assert page.evaluate("() => document.activeElement.id") == "search-input"
+    assert page.evaluate("() => document.getElementById('search-input').value") == "jkw"
+
+
+def test_w_toggles_watch_state_on_the_focused_row(page):
+    open_watch_later(page)
+    before = page.evaluate(
+        """() => document.querySelector('.row .watch-toggle').getAttribute('aria-pressed')"""
+    )
+    page.keyboard.press("j")
+    page.wait_for_timeout(150)
+    page.keyboard.press("w")
+    page.wait_for_timeout(700)
+    after = page.evaluate(
+        """() => { const t = document.querySelector('.row .watch-toggle');
+                   return t ? t.getAttribute('aria-pressed') : 'row-gone'; }"""
+    )
+    assert after != before, f"w did not change watch state ({before} -> {after})"
+
+
+def test_the_watch_toggle_does_not_navigate_the_row(page):
+    """The row is a link; its toggle must not also open X."""
+    open_watch_later(page)
+    page.click(".row .watch-toggle")
+    page.wait_for_timeout(600)
+    assert "/api" not in page.url and "x.com" not in page.url
+
+
+def test_advertised_shortcuts_all_exist(page):
+    """The status bar promises these; a promise in the UI has to be real."""
+    advertised = page.evaluate(
+        """() => [...document.querySelectorAll('.statusbar .shortcut kbd')].map(k => k.textContent.trim())"""
+    )
+    assert set(advertised) == {"j", "k", "o", "w", "/"}, advertised

@@ -240,18 +240,50 @@ both `schema.sql` (for new installs) and a numbered migration in
 ## UI notes
 
 The interface is a single static page with no build step and no frontend
-dependencies — one HTML file, one stylesheet, one script.
+dependencies — one HTML file, one stylesheet, one script. The only external
+request is the webfont pair (IBM Plex Sans + JetBrains Mono); if it fails,
+the stacks fall back to system faces and nothing else changes.
 
-- **Responsive.** The sidebar is a fixed column on wide screens; below
-  900px the shell stacks, navigation becomes a row and the tag list a
-  wrapping chip cloud. No horizontal scrolling at any width down to 320px.
+It is a dense, keyboard-first list rather than a feed of cards. One line
+per bookmark, monospace metadata, and a type badge so you can tell at a
+glance what you are about to open:
+
+| badge | meaning |
+|-------|---------|
+| `THR` | a self-authored thread, expanded during sync |
+| `VID` | has a YouTube link, so it is also in the watch-later queue |
+| `ART` | has a linked article, summarised during enrichment |
+| `TWT` | a plain tweet |
+
+A bookmark that is both a thread and a video shows `VID` — one badge slot,
+and the video is the one with a queue attached.
+
+### Keyboard
+
+| key | does |
+|-----|------|
+| `j` / `k` | move down / up the list |
+| `o` | open the focused bookmark on X |
+| `w` | toggle the focused bookmark's watched state |
+| `/` or `Ctrl`/`Cmd`+`K` | jump to the filter box |
+| `Esc` | leave the filter box |
+
+Shortcuts are suppressed while you are typing, so `/` and `j` in a search
+term behave like ordinary characters.
+
+- **Responsive.** The rail is a fixed column on wide screens; below 900px
+  the shell stacks, navigation becomes a row, the tag list a wrapping chip
+  cloud, and each table row becomes three stacked lines. No horizontal
+  scrolling at any width down to 320px.
 - **Light and dark** are both first-class, driven by
   `prefers-color-scheme` over one set of CSS custom properties. All text
   meets WCAG AA contrast in both.
 - **Keyboard and screen reader.** Every control clears a 44x44px hit area
   and shows a 2px accent focus ring. Toggle state lives in `aria-current`
   and `aria-pressed`, not only in a CSS class, and result counts, sync
-  progress and errors are announced through `aria-live` regions.
+  progress and errors are announced through `aria-live` regions. No CSS
+  `order` anywhere, so the visual sequence and the DOM sequence cannot
+  drift apart at any width.
 - **Motion** is one shared timing scale (120/160ms), disabled under
   `prefers-reduced-motion`.
 

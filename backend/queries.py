@@ -37,37 +37,53 @@ def build_fts_query(q: str) -> str:
     return " ".join('"' + t.replace('"', '""') + '"' for t in tokens)
 
 
-def _attach_thumbnails(conn, bookmarks: list[dict]) -> None:
-    """Fill in each bookmark's thumbnail, using one query for the whole page.
+def _attach_media(conn, bookmarks: list[dict]) -> None:
+    """Fill in each bookmark's `kind` and `thumbnail` in one batched query.
 
-    Attached media wins; otherwise fall back to the YouTube poster frame.
-    The linked_content lookup is batched rather than run per row.
+    `kind` drives the type badge in the row list. Precedence is
+    video > thread > article > tweet: the badge answers "what am I about to
+    do with this", and a video is the one that lands in the watch-later
+    queue, so it wins even when the bookmark is also a thread.
     """
     if not bookmarks:
         return
 
-    needs_lookup = [b["id"] for b in bookmarks if not b["_media_urls"]]
+    ids = [b["id"] for b in bookmarks]
+    placeholders = ",".join("?" * len(ids))
+    rows = conn.execute(
+        f"""
+        SELECT bookmark_id, type, url FROM linked_content
+        WHERE bookmark_id IN ({placeholders})
+        ORDER BY id
+        """,
+        ids,
+    ).fetchall()
+
     youtube_url_by_id: dict[int, str] = {}
-    if needs_lookup:
-        placeholders = ",".join("?" * len(needs_lookup))
-        rows = conn.execute(
-            f"""
-            SELECT bookmark_id, url FROM linked_content
-            WHERE type = 'youtube' AND bookmark_id IN ({placeholders})
-            ORDER BY id
-            """,
-            needs_lookup,
-        ).fetchall()
-        for r in rows:
+    types_by_id: dict[int, set[str]] = {}
+    for r in rows:
+        types_by_id.setdefault(r["bookmark_id"], set()).add(r["type"])
+        if r["type"] == "youtube":
             youtube_url_by_id.setdefault(r["bookmark_id"], r["url"])
 
     for b in bookmarks:
         media_urls = b.pop("_media_urls")
+        link_types = types_by_id.get(b["id"], set())
+        video_url = youtube_url_by_id.get(b["id"])
+
+        if video_url:
+            b["kind"] = "video"
+        elif b["is_thread"]:
+            b["kind"] = "thread"
+        elif "article" in link_types:
+            b["kind"] = "article"
+        else:
+            b["kind"] = "tweet"
+
         if media_urls:
             b["thumbnail"] = media_urls[0]
             continue
-        url = youtube_url_by_id.get(b["id"])
-        video_id = extract_youtube_video_id(url) if url else None
+        video_id = extract_youtube_video_id(video_url) if video_url else None
         b["thumbnail"] = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg" if video_id else None
 
 
@@ -93,7 +109,7 @@ def _attach_tags(conn, bookmarks: list[dict]) -> None:
 
 
 def _row_to_result(r) -> dict:
-    """Shape one row. _media_urls is scratch, removed by _attach_thumbnails."""
+    """Shape one row. _media_urls is scratch, removed by _attach_media."""
     return {
         "id": r["id"],
         "author_username": r["author_username"],
@@ -161,7 +177,7 @@ def search_bookmarks(conn, q: str | None, tags: list[str], limit: int, offset: i
         total = conn.execute(count_sql, tag_params).fetchone()["c"]
 
     results = [_row_to_result(r) for r in rows]
-    _attach_thumbnails(conn, results)
+    _attach_media(conn, results)
     _attach_tags(conn, results)
     return {
         "results": results,
@@ -205,7 +221,7 @@ def list_watch_later(conn, status: str | None) -> list[dict]:
         result = _row_to_result(r)
         result.update(watch_status=r["watch_status"], added_at=r["added_at"], watched_at=r["watched_at"])
         results.append(result)
-    _attach_thumbnails(conn, results)
+    _attach_media(conn, results)
     _attach_tags(conn, results)
     return results
 
@@ -222,3 +238,21 @@ def toggle_watch_later(conn, bookmark_id: int) -> dict | None:
     )
     conn.commit()
     return {"bookmark_id": bookmark_id, "status": new_status, "watched_at": watched_at}
+
+
+def get_stats(conn) -> dict:
+    """Counts and last-sync time for the sidebar rail and the status bar."""
+    bookmarks = conn.execute("SELECT COUNT(*) c FROM bookmarks").fetchone()["c"]
+    unwatched = conn.execute(
+        "SELECT COUNT(*) c FROM watch_later WHERE status = 'unwatched'"
+    ).fetchone()["c"]
+    watch_total = conn.execute("SELECT COUNT(*) c FROM watch_later").fetchone()["c"]
+    # bookmarks.synced_at is stamped on every sync, so the newest one is the
+    # last time a sync actually wrote something.
+    last_synced = conn.execute("SELECT MAX(synced_at) m FROM bookmarks").fetchone()["m"]
+    return {
+        "bookmarks": bookmarks,
+        "watch_later_unwatched": unwatched,
+        "watch_later_total": watch_total,
+        "last_synced_at": last_synced,
+    }
