@@ -96,7 +96,7 @@ def test_a_link_that_succeeds_is_never_retried(conn, seed, monkeypatch):
 
     monkeypatch.setattr(enrich, "fetch_article_html",
                         lambda url, **kw: fetches.append(url) or (html, url))
-    monkeypatch.setattr(enrich, "_claude_client", lambda: object())
+    monkeypatch.setattr(enrich, "_llm", lambda: object())
     monkeypatch.setattr(enrich, "_summarize_article", lambda c, t, x: "a summary")
 
     assert enrich.process_linked_content(conn)["linked_content_done"] == 1
@@ -117,7 +117,7 @@ def test_successful_youtube_link_lands_in_watch_later(conn, seed, monkeypatch):
 
 @pytest.fixture
 def stub_claude(monkeypatch):
-    monkeypatch.setattr(enrich, "_claude_client", lambda: object())
+    monkeypatch.setattr(enrich, "_llm", lambda: object())
 
 
 def test_tagging_stops_after_repeated_failures(conn, seed, stub_claude, monkeypatch):

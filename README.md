@@ -17,7 +17,8 @@ enrichment, search, the web UI, and optional scheduled sync all work.
 
 - Python 3.11+
 - An X (Twitter) developer app with OAuth 2.0 credentials
-- An Anthropic API key
+- A language model: either an Anthropic API key, or a local model server
+  (Ollama, LM Studio, llama.cpp, vLLM — see step 3)
 
 ## Setup
 
@@ -57,12 +58,57 @@ exact versions this was last verified against, use
    new developer accounts). This app logs roughly how many bookmark reads
    each sync uses so you can keep an eye on cost.
 
-### 3. Get your Anthropic API key
+### 3. Choose a language model
 
-1. Go to the [Anthropic Console](https://console.anthropic.com/settings/keys)
-   and create an API key.
-2. Claude is used for article summarization and topic tagging. Costs are
-   small per bookmark but scale with how many bookmarks you sync.
+Enrichment needs a model for two small jobs: summarising a linked article
+in a few sentences, and suggesting 1-4 topic tags per bookmark. Neither
+needs a frontier model. Pick one of:
+
+**A hosted model (Claude).** Create a key at the
+[Anthropic Console](https://console.anthropic.com/settings/keys) and set
+`ANTHROPIC_API_KEY`. Costs are small per bookmark but scale with how many
+you sync. Defaults to `claude-haiku-4-5`; override with `ANTHROPIC_MODEL`.
+
+**A model on your own machine.** Anything that speaks the OpenAI
+`/chat/completions` shape works, which is nearly every local runner. Set
+`LLM_BASE_URL` and `LLM_MODEL` in `.env` and leave `ANTHROPIC_API_KEY`
+blank — setting a base URL switches provider on its own.
+
+| runner | `LLM_BASE_URL` | example `LLM_MODEL` |
+|--------|----------------|---------------------|
+| Ollama | `http://localhost:11434/v1` | `llama3.1:8b` |
+| LM Studio | `http://localhost:1234/v1` | `qwen2.5-7b-instruct` |
+| llama.cpp server | `http://localhost:8080/v1` | whatever you loaded |
+| vLLM | `http://localhost:8000/v1` | the served model id |
+
+The URL is accepted with or without the `/v1`. Most local servers ignore
+`LLM_API_KEY`; set it to any non-empty string for the few that insist.
+
+Nothing else about XBM changes — search, sync and the UI are identical
+either way, and no bookmark text leaves your machine when you run locally.
+
+Check what it picked up before syncing:
+
+```bash
+curl -s http://127.0.0.1:8000/api/health
+```
+
+The `llm` block reports the provider, model and base URL, and whether it
+is fully configured.
+
+**Tuning for local models.** The defaults suit a hosted model; three knobs
+matter on your own hardware:
+
+- `LLM_TIMEOUT_SECONDS` (default 120) — raise it if the first call times
+  out while weights load, or the model is large and CPU-bound.
+- `LLM_INPUT_CHAR_LIMIT` (default 12000) — how much article text is sent.
+  Lower it for a small context window.
+- `LLM_MAX_TOKENS` (default 512) — output room per call. A reasoning model
+  that writes a `<think>` block before answering needs more.
+
+XBM strips `<think>` blocks and tolerates the bulleted, numbered, labelled
+and quoted tag lists small models tend to produce, so a model that ignores
+"comma-separated, no preamble" still yields usable tags.
 
 ### 4. Configure your environment
 
@@ -74,7 +120,8 @@ Then edit `.env` and fill in:
 
 - `X_CLIENT_ID` — from step 2 above
 - `X_CLIENT_SECRET` — leave blank if you registered a public client (recommended)
-- `ANTHROPIC_API_KEY` — from step 3 above
+- `ANTHROPIC_API_KEY` — from step 3, **or** `LLM_BASE_URL` + `LLM_MODEL`
+  to use a model on your own machine instead
 
 `.env` is gitignored — your keys never get committed.
 
@@ -136,8 +183,9 @@ curl -X POST http://127.0.0.1:8000/api/enrich
 This is resumable: it only processes linked-content items that aren't yet
 `done` and only tags bookmarks that don't have tags yet, so re-running
 after a crash or a rate limit picks up where it left off instead of
-redoing finished work. It uses Claude Haiku (cheap, fast) and reports how
-many summarization/tagging calls it made, since those are billed too.
+redoing finished work. It reports how many model calls it made
+(`llm_summary_calls`, `llm_tagging_calls`) — worth watching whether you
+are paying per token or waiting on your own GPU.
 
 Work that can never succeed is given up on rather than retried forever. A
 link that fails (404, paywall, deleted video) is retried up to 3 times;

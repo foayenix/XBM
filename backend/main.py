@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend import config, db, jobs, queries, scheduler, security, x_auth
+from backend import config, db, jobs, llm, queries, scheduler, security, x_auth
 from backend.enrich import EnrichmentError, run_enrichment
 from backend.jobs import JobBusyError
 from backend.sync import sync_bookmarks
@@ -51,8 +51,10 @@ def health():
     return {
         "status": "ok",
         "database_path": str(config.DATABASE_PATH),
-        "anthropic_key_configured": bool(config.ANTHROPIC_API_KEY),
         "x_client_configured": bool(config.X_CLIENT_ID),
+        # Which model backend enrichment will use, so a misconfigured local
+        # server is visible without running a sync.
+        "llm": llm.describe(),
     }
 
 

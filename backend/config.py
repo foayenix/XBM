@@ -11,7 +11,35 @@ X_CLIENT_ID = os.environ.get("X_CLIENT_ID", "")
 X_CLIENT_SECRET = os.environ.get("X_CLIENT_SECRET", "")
 X_REDIRECT_URI = os.environ.get("X_REDIRECT_URI", "http://127.0.0.1:8000/auth/callback")
 
+# --- Language model ------------------------------------------------------
+# Enrichment needs a model for two small jobs: summarising a linked article
+# and suggesting topic tags. Either the Claude API or anything on your own
+# machine that speaks the OpenAI /chat/completions shape.
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+# Claude's model when LLM_PROVIDER is "anthropic" and LLM_MODEL is unset.
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
+
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "").strip()
+LLM_MODEL = os.environ.get("LLM_MODEL", "").strip()
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "").strip()
+
+# Setting a base URL is an unambiguous "use my own server", so it selects the
+# openai-compatible provider on its own. LLM_PROVIDER overrides either way.
+_provider_env = os.environ.get("LLM_PROVIDER", "").strip().lower()
+LLM_PROVIDER = _provider_env or ("openai" if LLM_BASE_URL else "anthropic")
+
+# Local models are often far slower than a hosted API, especially on the
+# first call while weights load, so this is generous by default.
+LLM_TIMEOUT_SECONDS = float(os.environ.get("LLM_TIMEOUT_SECONDS", "120") or "120")
+
+# Output cap per call. Generous enough that a reasoning model which "thinks"
+# before answering still has room to produce the answer.
+LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "512") or "512")
+
+# How much article text to send. Small local models have small context
+# windows; drop this if yours truncates or slows to a crawl.
+LLM_INPUT_CHAR_LIMIT = int(os.environ.get("LLM_INPUT_CHAR_LIMIT", "12000") or "12000")
 
 DATABASE_PATH = REPO_ROOT / os.environ.get("DATABASE_PATH", "db/xbm.sqlite3")
 
