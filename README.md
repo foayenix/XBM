@@ -27,8 +27,23 @@ enrichment, search, the web UI, and optional scheduled sync all work.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
+
+**Check your interpreter first.** XBM needs Python 3.11+, and `python3` is
+still 3.9 on stock macOS — which fails during install with a confusing
+dependency-resolver error rather than a version message:
+
+```bash
+python3 --version        # must be 3.11 or newer
+python3.12 -m venv .venv # name the version explicitly if it is not
+```
+
+A virtualenv also can't be moved: its scripts hard-code the path they were
+created at, so if you relocate the project, `rm -rf .venv` and make it
+again. Re-running `python3 -m venv .venv` over the old one does not repair
+it.
 
 `requirements.txt` gives minimum versions. For a reproducible install of the
 exact versions this was last verified against, use

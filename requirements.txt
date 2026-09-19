@@ -10,4 +10,9 @@ python-dotenv>=1.0
 anthropic>=0.40
 youtube-transcript-api>=1.0
 readability-lxml>=0.8
-lxml[html_clean]>=5.2
+# Plain lxml: backend/enrich.py imports lxml.html directly. The
+# html-clean extra is readability-lxml's own dependency and arrives with
+# it. Asking for lxml[html_clean] here as well made older pip treat the
+# underscore and hyphen spellings of one extra as two, and crash with
+# "Candidate is not for this requirement lxml[html-clean,html-clean]".
+lxml>=5.2
