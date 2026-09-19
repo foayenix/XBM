@@ -16,6 +16,14 @@ const state = {
   loading: false,
 };
 
+// Status text is the only feedback channel in this UI, so an error must
+// not look identical to "75 bookmarks". `is-error` recolours it, and the
+// aria-live region on these elements announces either kind.
+function setStatus(el, message, { isError = false } = {}) {
+  el.textContent = message;
+  el.classList.toggle("is-error", isError);
+}
+
 function debounce(fn, ms) {
   let t;
   return (...args) => {
@@ -56,6 +64,10 @@ function buildCard(bookmark, opts = {}) {
     img.src = bookmark.thumbnail;
     img.alt = "";
     img.loading = "lazy";
+    // YouTube poster frames disappear when a video is deleted, and tweet
+    // media 404s eventually too. Drop the element rather than showing the
+    // browser's broken-image icon.
+    img.addEventListener("error", () => img.remove());
     card.appendChild(img);
   }
 
@@ -111,7 +123,9 @@ function buildCard(bookmark, opts = {}) {
     const btn = document.createElement("button");
     btn.className = "watch-toggle";
     btn.type = "button";
-    btn.textContent = bookmark.watch_status === "watched" ? "Mark unwatched" : "Mark watched";
+    const watched = bookmark.watch_status === "watched";
+    btn.textContent = watched ? "Mark unwatched" : "Mark watched";
+    btn.setAttribute("aria-pressed", String(watched));
     btn.addEventListener("click", async () => {
       btn.disabled = true;
       await fetch(`/api/watch-later/${bookmark.id}/toggle`, { method: "POST" });
@@ -125,7 +139,7 @@ function buildCard(bookmark, opts = {}) {
   link.target = "_blank";
   link.rel = "noopener noreferrer";
   link.className = "open-link";
-  link.textContent = "Open on X ->";
+  link.textContent = "Open on X \u2192";
   actions.appendChild(link);
 
   body.appendChild(actions);
@@ -157,6 +171,8 @@ async function runSearch({ append = false } = {}) {
   params.set("limit", String(PAGE_SIZE));
   params.set("offset", String(state.offset));
 
+  if (!append) setStatus(statusEl, "Searching\u2026");
+
   try {
     const res = await fetch("/api/search?" + params.toString());
     const data = await res.json();
@@ -167,19 +183,21 @@ async function runSearch({ append = false } = {}) {
 
     const shown = state.offset;
     const total = data.total;
-    statusEl.textContent =
+    setStatus(
+      statusEl,
       total === 0
         ? "No bookmarks"
         : shown < total
           ? `Showing ${shown} of ${total} bookmarks`
           : total === 1
             ? "1 bookmark"
-            : `${total} bookmarks`;
+            : `${total} bookmarks`
+    );
 
     moreBtn.hidden = !data.has_more;
     moreBtn.textContent = `Load ${Math.min(PAGE_SIZE, total - shown)} more`;
   } catch (err) {
-    statusEl.textContent = "Error: " + err.message;
+    setStatus(statusEl, "Error: " + err.message, { isError: true });
     moreBtn.hidden = true;
   } finally {
     state.loading = false;
@@ -202,7 +220,8 @@ async function loadTags() {
     const li = document.createElement("li");
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "tag-filter" + (state.tags.has(t.name) ? " active" : "");
+    btn.className = "tag-filter";
+    btn.setAttribute("aria-pressed", String(state.tags.has(t.name)));
     btn.textContent = `${t.name} (${t.count})`;
     btn.addEventListener("click", () => {
       if (state.tags.has(t.name)) {
@@ -230,14 +249,14 @@ async function loadWatchLater() {
     onToggle: loadWatchLater,
   });
   const statusEl = document.getElementById("watch-later-status");
-  statusEl.textContent = items.length === 1 ? "1 video" : `${items.length} videos`;
+  setStatus(statusEl, items.length === 1 ? "1 video" : `${items.length} videos`);
 }
 
 function setupViewSwitching() {
   document.querySelectorAll(".nav-item").forEach((btn) => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".nav-item").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
+      document.querySelectorAll(".nav-item").forEach((b) => b.removeAttribute("aria-current"));
+      btn.setAttribute("aria-current", "page");
       const view = btn.dataset.view;
       document.getElementById("search-view").hidden = view !== "search";
       document.getElementById("watch-later-view").hidden = view !== "watch-later";
@@ -249,8 +268,8 @@ function setupViewSwitching() {
 function setupWatchLaterFilters() {
   document.querySelectorAll(".wl-filter").forEach((btn) => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".wl-filter").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
+      document.querySelectorAll(".wl-filter").forEach((b) => b.setAttribute("aria-pressed", "false"));
+      btn.setAttribute("aria-pressed", "true");
       state.wlStatus = btn.dataset.status;
       loadWatchLater();
     });
@@ -274,7 +293,7 @@ function setupSyncButton() {
   btn.addEventListener("click", async () => {
     btn.disabled = true;
     try {
-      statusEl.textContent = "Syncing bookmarks...";
+      setStatus(statusEl, "Syncing bookmarks\u2026");
       const syncRes = await fetch("/api/sync", { method: "POST" });
       const syncData = await syncRes.json();
       // 409 means the background scheduler (or another tab) already has a
@@ -282,20 +301,22 @@ function setupSyncButton() {
       if (syncRes.status === 409) throw new Error(syncData.detail || "A sync is already running.");
       if (!syncRes.ok) throw new Error(syncData.detail || "Sync failed");
 
-      statusEl.textContent = "Enriching...";
+      setStatus(statusEl, "Enriching\u2026");
       const enrichRes = await fetch("/api/enrich", { method: "POST" });
       const enrichData = await enrichRes.json();
       if (enrichRes.status === 409) throw new Error(enrichData.detail || "An enrichment run is already in progress.");
       if (!enrichRes.ok) throw new Error(enrichData.detail || "Enrichment failed");
 
-      statusEl.textContent =
+      setStatus(
+        statusEl,
         `Synced ${syncData.new} new, ${syncData.updated} updated. ` +
-        `Enriched ${enrichData.linked_content_done} links, tagged ${enrichData.bookmarks_tagged} bookmarks.`;
+          `Enriched ${enrichData.linked_content_done} links, tagged ${enrichData.bookmarks_tagged} bookmarks.`
+      );
 
       await loadTags();
       await runSearch();
     } catch (err) {
-      statusEl.textContent = "Error: " + err.message;
+      setStatus(statusEl, "Error: " + err.message, { isError: true });
     } finally {
       btn.disabled = false;
     }

@@ -29,7 +29,27 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run tests
-        run: pytest
+        # UI tests need a browser; they get their own job below.
+        run: pytest -m "not ui"
+
+  ui:
+    # Browser-level checks: responsive behaviour, touch targets, contrast,
+    # focus visibility, ARIA state. These need a real layout engine.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Install Chromium
+        run: playwright install --with-deps chromium
+      - name: Run UI tests
+        run: pytest -m ui
 
   lockfile:
     # The resolved versions in requirements.lock must still satisfy the
@@ -49,4 +69,4 @@ jobs:
       - name: Check the lockfile satisfies requirements.txt
         run: pip install --dry-run --no-deps -r requirements.txt
       - name: Run tests against locked versions
-        run: pytest
+        run: pytest -m "not ui"

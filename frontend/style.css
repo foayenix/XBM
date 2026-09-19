@@ -1,28 +1,54 @@
+/* Design tokens.
+   Neutrals are slightly blue-tinted rather than pure gray, so text and
+   chrome sit in the same colour family as the accent instead of looking
+   like two unrelated palettes. */
 :root {
   --bg: #ffffff;
-  --bg-sidebar: #f7f7f8;
-  --text: #1a1a1a;
-  --text-muted: #6b7280;
-  --border: #e5e7eb;
+  --bg-sidebar: #f6f7f9;
+  --text: #16181d;
+  --text-muted: #5f6672;
+  --border: #e3e6ea;
   --accent: #2563eb;
   --accent-fg: #ffffff;
-  --mark-bg: #fef08a;
+  --danger: #b42318;
+  --mark-bg: #fde68a;
   --card-bg: #ffffff;
-  --card-hover: #f9fafb;
+  --card-hover: #f6f7f9;
+  --focus: #2563eb;
+
+  /* One scale, so nothing invents its own timing. */
+  --motion-fast: 120ms;
+  --motion: 160ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Minimum comfortable hit area for a finger. */
+  --target: 44px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #15161a;
     --bg-sidebar: #1c1d22;
-    --text: #e6e6e6;
-    --text-muted: #9aa0a8;
+    --text: #e8eaed;
+    --text-muted: #a2a9b4;
     --border: #2b2d33;
     --accent: #5b8cf7;
     --accent-fg: #0b0d10;
-    --mark-bg: #7c6a1f;
+    --danger: #ff9d92;
+    --mark-bg: #6b5a17;
     --card-bg: #1c1d22;
     --card-hover: #23252b;
+    --focus: #7aa2f9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
 
@@ -30,16 +56,29 @@
 
 body {
   margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
   background: var(--bg);
   color: var(--text);
+}
+
+/* One designed focus ring for everything, visible in both themes. The UA
+   default is a thin near-black ring that all but disappears on dark. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1.25rem;
+  gap: 0.75rem;
+  padding: 0.6rem 1.25rem;
   border-bottom: 1px solid var(--border);
 }
 
@@ -52,13 +91,21 @@ body {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 .sync-status {
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
   max-width: 40ch;
   text-align: right;
+}
+
+/* Errors must not read as ordinary status text. */
+.sync-status.is-error,
+.status-line.is-error {
+  color: var(--danger);
+  font-weight: 500;
 }
 
 button {
@@ -66,22 +113,37 @@ button {
   cursor: pointer;
 }
 
+/* Every control clears the 44px finger target. */
+#sync-btn,
+.nav-item,
+.tag-filter,
+.wl-filter,
+.watch-toggle,
+.load-more,
+.open-link,
+#search-input {
+  min-height: var(--target);
+}
+
 #sync-btn {
   background: var(--accent);
   color: var(--accent-fg);
   border: none;
-  border-radius: 6px;
-  padding: 0.45rem 0.9rem;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  white-space: nowrap;
+  transition: background var(--motion-fast) var(--ease), opacity var(--motion-fast) var(--ease);
 }
 
-#sync-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
+#sync-btn:hover:not(:disabled) { opacity: 0.9; }
+#sync-btn:disabled { opacity: 0.6; cursor: default; }
 
+/* The layout fills whatever is left under the topbar, with no hardcoded
+   assumption about how tall the topbar happens to be. */
 .layout {
   display: flex;
-  min-height: calc(100vh - 53px);
+  flex: 1;
+  min-height: 0;
 }
 
 .sidebar {
@@ -89,7 +151,7 @@ button {
   flex-shrink: 0;
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
-  padding: 1rem;
+  padding: 0.75rem;
   overflow-y: auto;
 }
 
@@ -98,26 +160,35 @@ button {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
-  margin: 1.25rem 0 0.5rem;
+  margin: 1.25rem 0 0.35rem;
 }
 
-.nav-item {
-  display: block;
+.nav-item,
+.tag-filter {
+  display: flex;
+  align-items: center;
   width: 100%;
   text-align: left;
   background: none;
   border: none;
-  border-radius: 6px;
-  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
   color: var(--text);
-  font-size: 0.9rem;
+  transition: background var(--motion-fast) var(--ease), color var(--motion-fast) var(--ease);
 }
 
-.nav-item:hover {
-  background: var(--card-hover);
+.nav-item { font-size: 0.9375rem; }
+
+.tag-filter {
+  font-size: 0.875rem;
+  color: var(--text-muted);
 }
 
-.nav-item.active {
+.nav-item:hover,
+.tag-filter:hover { background: var(--card-hover); }
+
+.nav-item[aria-current="page"],
+.tag-filter[aria-pressed="true"] {
   background: var(--accent);
   color: var(--accent-fg);
 }
@@ -128,31 +199,18 @@ button {
   padding: 0;
 }
 
-.tag-filter {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  border-radius: 6px;
-  padding: 0.35rem 0.6rem;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-}
-
-.tag-filter:hover {
-  background: var(--card-hover);
-}
-
-.tag-filter.active {
-  background: var(--accent);
-  color: var(--accent-fg);
-}
-
 main {
   flex: 1;
   padding: 1.25rem;
   min-width: 0;
+}
+
+.field-label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
 }
 
 #search-input {
@@ -160,14 +218,18 @@ main {
   max-width: 480px;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--bg);
   color: var(--text);
-  font-size: 0.95rem;
+  font-size: 1rem;
+  transition: border-color var(--motion-fast) var(--ease);
 }
+
+#search-input:hover { border-color: var(--text-muted); }
 
 .wl-filters {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 1rem;
 }
@@ -176,12 +238,15 @@ main {
   background: var(--bg-sidebar);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 0.3rem 0.8rem;
-  font-size: 0.85rem;
+  padding: 0.35rem 1rem;
+  font-size: 0.875rem;
   color: var(--text);
+  transition: background var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease);
 }
 
-.wl-filter.active {
+.wl-filter:hover { background: var(--card-hover); }
+
+.wl-filter[aria-pressed="true"] {
   background: var(--accent);
   color: var(--accent-fg);
   border-color: var(--accent);
@@ -199,15 +264,18 @@ main {
   gap: 0.85rem;
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 0.85rem;
+  transition: border-color var(--motion) var(--ease), background var(--motion) var(--ease);
 }
+
+.card:hover { border-color: var(--text-muted); }
 
 .card .thumb {
   width: 96px;
   height: 96px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: 8px;
   flex-shrink: 0;
   background: var(--bg-sidebar);
 }
@@ -220,8 +288,9 @@ main {
 .meta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
-  font-size: 0.8rem;
+  font-size: 0.8125rem;
   color: var(--text-muted);
   margin-bottom: 0.3rem;
 }
@@ -234,23 +303,23 @@ main {
 .badge {
   background: var(--bg-sidebar);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 5px;
   padding: 0.05rem 0.4rem;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
 }
 
 .text {
   margin: 0 0 0.5rem;
-  font-size: 0.92rem;
-  line-height: 1.4;
+  font-size: 0.9375rem;
+  line-height: 1.5;
   overflow-wrap: break-word;
 }
 
 .text mark {
   background: var(--mark-bg);
-  color: inherit;
+  color: var(--text);
   border-radius: 3px;
-  padding: 0 0.1rem;
+  padding: 0 0.15rem;
 }
 
 .tags {
@@ -264,7 +333,7 @@ main {
   background: var(--bg-sidebar);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 0.1rem 0.55rem;
+  padding: 0.1rem 0.6rem;
   font-size: 0.75rem;
   color: var(--text-muted);
 }
@@ -272,47 +341,110 @@ main {
 .card-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.75rem;
 }
 
 .watch-toggle {
   background: var(--bg-sidebar);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.3rem 0.7rem;
-  font-size: 0.8rem;
+  border-radius: 8px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.875rem;
   color: var(--text);
+  transition: background var(--motion-fast) var(--ease);
 }
+
+.watch-toggle:hover { background: var(--card-hover); }
 
 .open-link {
-  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.875rem;
   color: var(--accent);
   text-decoration: none;
+  transition: text-decoration-color var(--motion-fast) var(--ease);
 }
 
-.open-link:hover {
-  text-decoration: underline;
-}
+.open-link:hover { text-decoration: underline; }
 
 .status-line {
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
 }
 
 .load-more {
   display: block;
   margin: 1.5rem auto 0;
-  padding: 0.55rem 1.4rem;
+  padding: 0.55rem 1.5rem;
   background: var(--card-bg);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
+  transition: background var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease);
 }
 
 .load-more:hover {
   background: var(--card-hover);
+  border-color: var(--text-muted);
 }
 
-.load-more[hidden] {
-  display: none;
+.load-more[hidden] { display: none; }
+
+/* Below this width the fixed 220px sidebar leaves too little for a card,
+   so the shell stacks: navigation becomes a row across the top and the
+   tag list becomes a wrapping cloud instead of a tall column. */
+@media (max-width: 900px) {
+  .layout { flex-direction: column; }
+
+  .sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    overflow-y: visible;
+  }
+
+  .sidebar h2 { margin-top: 0.85rem; }
+
+  .sidebar-nav {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .nav-item {
+    width: auto;
+    flex: 1;
+    justify-content: center;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+  }
+
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    /* Two full rows of 44px chips plus the gap, so the cap lands on a row
+       boundary instead of slicing the third row in half. */
+    max-height: 5.9rem;
+    overflow-y: auto;
+  }
+
+  .tag-filter {
+    width: auto;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.35rem 0.9rem;
+    background: var(--card-bg);
+  }
+
+  main { padding: 1rem; }
+}
+
+@media (max-width: 480px) {
+  .topbar { padding: 0.6rem 1rem; }
+  .sync-status { max-width: 22ch; font-size: 0.8125rem; }
+  main { padding: 0.85rem; }
+  .card { padding: 0.75rem; gap: 0.7rem; }
+  .card .thumb { width: 72px; height: 72px; }
+  #search-input { max-width: none; }
 }

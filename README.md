@@ -237,6 +237,36 @@ both `schema.sql` (for new installs) and a numbered migration in
 `scripts/init_db.py` (for existing ones). Migrations run *before*
 `schema.sql`, so statements in `schema.sql` may reference migrated columns.
 
+## UI notes
+
+The interface is a single static page with no build step and no frontend
+dependencies — one HTML file, one stylesheet, one script.
+
+- **Responsive.** The sidebar is a fixed column on wide screens; below
+  900px the shell stacks, navigation becomes a row and the tag list a
+  wrapping chip cloud. No horizontal scrolling at any width down to 320px.
+- **Light and dark** are both first-class, driven by
+  `prefers-color-scheme` over one set of CSS custom properties. All text
+  meets WCAG AA contrast in both.
+- **Keyboard and screen reader.** Every control clears a 44x44px hit area
+  and shows a 2px accent focus ring. Toggle state lives in `aria-current`
+  and `aria-pressed`, not only in a CSS class, and result counts, sync
+  progress and errors are announced through `aria-live` regions.
+- **Motion** is one shared timing scale (120/160ms), disabled under
+  `prefers-reduced-motion`.
+
+`tests/test_ui.py` asserts all of the above against a real browser, so
+these do not quietly regress. Run them with:
+
+```bash
+pip install -r requirements-dev.txt
+playwright install chromium
+pytest -m ui
+```
+
+They skip automatically if no browser is installed, so `pytest` still
+works anywhere.
+
 ## Security notes
 
 XBM has no login of its own, so anything that can reach the port can spend
@@ -272,8 +302,9 @@ The suite runs against a throwaway SQLite file built by the real
 `init_db.py`, and stubs the X and Anthropic APIs — it makes no network
 calls and costs nothing.
 
-CI (`.github/workflows/ci.yml`) runs it on Python 3.11, 3.12 and 3.13, and
-separately against the pinned versions in `requirements.lock`.
+CI (`.github/workflows/ci.yml`) runs it on Python 3.11, 3.12 and 3.13,
+separately against the pinned versions in `requirements.lock`, and runs the
+browser-level UI checks in a job of their own.
 
 ## Roadmap
 

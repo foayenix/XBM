@@ -2,3 +2,7 @@
 #   pip install -r requirements.txt -r requirements-dev.txt
 -r requirements.txt
 pytest>=8.2
+# Browser-level UI checks (tests/test_ui.py). After installing, run
+#   playwright install chromium
+# The UI tests skip themselves if no browser binary is present.
+playwright>=1.40

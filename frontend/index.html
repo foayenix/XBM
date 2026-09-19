@@ -12,35 +12,38 @@
   <header class="topbar">
     <h1>XBM</h1>
     <div class="topbar-actions">
-      <span id="sync-status" class="sync-status"></span>
+      <span id="sync-status" class="sync-status" role="status" aria-live="polite"></span>
       <button id="sync-btn">Sync now</button>
     </div>
   </header>
 
   <div class="layout">
-    <nav class="sidebar">
-      <button class="nav-item active" data-view="search" type="button">All bookmarks</button>
-      <button class="nav-item" data-view="watch-later" type="button">Watch later</button>
-      <h2>Tags</h2>
-      <ul id="tag-list" class="tag-list"></ul>
+    <nav class="sidebar" aria-label="Views and tag filters">
+      <div class="sidebar-nav">
+        <button class="nav-item" data-view="search" type="button" aria-current="page">All bookmarks</button>
+        <button class="nav-item" data-view="watch-later" type="button">Watch later</button>
+      </div>
+      <h2 id="tags-heading">Tags</h2>
+      <ul id="tag-list" class="tag-list" aria-labelledby="tags-heading"></ul>
     </nav>
 
     <main>
-      <section id="search-view" class="view">
-        <input id="search-input" type="search" placeholder="Search bookmarks..." autocomplete="off" />
+      <section id="search-view" class="view" aria-label="All bookmarks">
+        <label class="field-label" for="search-input">Search bookmarks</label>
+        <input id="search-input" type="search" placeholder="Title, author, tag, article text..." autocomplete="off" />
         <div id="results" class="results"></div>
         <button id="load-more" class="load-more" type="button" hidden>Load more</button>
-        <p id="results-status" class="status-line"></p>
+        <p id="results-status" class="status-line" role="status" aria-live="polite"></p>
       </section>
 
-      <section id="watch-later-view" class="view" hidden>
-        <div class="wl-filters">
-          <button class="wl-filter active" data-status="unwatched" type="button">Unwatched</button>
-          <button class="wl-filter" data-status="watched" type="button">Watched</button>
-          <button class="wl-filter" data-status="" type="button">All</button>
+      <section id="watch-later-view" class="view" aria-label="Watch later" hidden>
+        <div class="wl-filters" role="group" aria-label="Filter by watched state">
+          <button class="wl-filter" data-status="unwatched" type="button" aria-pressed="true">Unwatched</button>
+          <button class="wl-filter" data-status="watched" type="button" aria-pressed="false">Watched</button>
+          <button class="wl-filter" data-status="" type="button" aria-pressed="false">All</button>
         </div>
         <div id="watch-later-results" class="results"></div>
-        <p id="watch-later-status" class="status-line"></p>
+        <p id="watch-later-status" class="status-line" role="status" aria-live="polite"></p>
       </section>
     </main>
   </div>
