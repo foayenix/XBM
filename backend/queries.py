@@ -14,6 +14,29 @@ SNIPPET_START = ""
 SNIPPET_END = ""
 
 
+def build_fts_query(q: str) -> str:
+    """Turn a user's search box input into a safe FTS5 MATCH expression.
+
+    FTS5 parses its right-hand side as a query language, so raw user input
+    blows up on perfectly ordinary text: an apostrophe ("what's"), a plus
+    ("c++"), a trailing boolean ("foo AND"), a stray quote, or a colon
+    ("x:", read as a column filter) each raise OperationalError. Since the
+    UI searches on every keystroke, half-typed input hits this constantly.
+
+    So we don't expose FTS5 syntax at all: split on whitespace and wrap each
+    token in a quoted string (doubling any embedded quote, which is how FTS5
+    escapes one). Tokens are implicitly ANDed, and every operator, wildcard,
+    and column reference is neutralised into a literal. Punctuation the FTS5
+    tokenizer ignores just drops out, so "c++" still matches a document
+    containing "c++".
+
+    Returns "" when the input has no usable tokens, which callers treat as
+    "no query" rather than passing an empty MATCH (a syntax error in itself).
+    """
+    tokens = [t for t in (q or "").split() if t]
+    return " ".join('"' + t.replace('"', '""') + '"' for t in tokens)
+
+
 def _thumbnail_for(conn, bookmark_id: int, media_urls: list[str]) -> str | None:
     if media_urls:
         return media_urls[0]
@@ -80,7 +103,12 @@ def _tag_filter_clause(tags: list[str]) -> tuple[str, list[str]]:
 def search_bookmarks(conn, q: str | None, tags: list[str], limit: int, offset: int) -> dict:
     tag_clause, tag_params = _tag_filter_clause(tags)
 
-    if q:
+    # Never hand raw user input to FTS5 - see build_fts_query. An input that
+    # reduces to no tokens (whitespace, punctuation only) falls through to the
+    # plain browse query below instead of matching nothing.
+    match_expr = build_fts_query(q) if q else ""
+
+    if match_expr:
         sql = f"""
             SELECT b.id, b.author_username, b.author_name, b.created_at, b.text, b.media_urls, b.is_thread,
                    snippet(bookmarks_fts, 0, ?, ?, '...', 24) AS snippet_text
@@ -90,14 +118,14 @@ def search_bookmarks(conn, q: str | None, tags: list[str], limit: int, offset: i
             ORDER BY rank
             LIMIT ? OFFSET ?
         """
-        rows = conn.execute(sql, [SNIPPET_START, SNIPPET_END, q, *tag_params, limit, offset]).fetchall()
+        rows = conn.execute(sql, [SNIPPET_START, SNIPPET_END, match_expr, *tag_params, limit, offset]).fetchall()
 
         count_sql = f"""
             SELECT COUNT(*) c FROM bookmarks_fts
             JOIN bookmarks b ON b.id = bookmarks_fts.rowid
             WHERE bookmarks_fts MATCH ? {tag_clause}
         """
-        total = conn.execute(count_sql, [q, *tag_params]).fetchone()["c"]
+        total = conn.execute(count_sql, [match_expr, *tag_params]).fetchone()["c"]
     else:
         sql = f"""
             SELECT b.id, b.author_username, b.author_name, b.created_at, b.text, b.media_urls, b.is_thread,

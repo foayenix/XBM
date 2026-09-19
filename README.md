@@ -10,9 +10,8 @@ hosting, no accounts, no multi-user auth.
 
 ## Status
 
-This repo is being built in phases. Right now: **Phase 1 — project
-scaffold**. The server starts and serves a placeholder page; syncing,
-enrichment, and search are not wired up yet.
+All six build phases are complete (see the roadmap at the bottom): sync,
+enrichment, search, the web UI, and optional scheduled sync all work.
 
 ## Requirements
 
@@ -104,8 +103,11 @@ machine — not over SSH port forwarding or in a remote/cloud sandbox where
    how many X API reads the sync used (bookmarks are billed per read —
    see the cost note in step 2 above).
 4. Re-running the sync is safe — it's idempotent by tweet id and won't
-   create duplicates or re-bill for unchanged bookmarks reads beyond
-   what pagination requires.
+   create duplicates. Bookmarks you've already synced cost only the
+   pagination reads needed to walk past them; thread expansion is *not*
+   repeated, because a tweet's reply chain never changes, so already-known
+   threads cost nothing on a re-sync. The sync summary reports
+   `threads_reused_from_cache` so you can see that happening.
 
 **Known limitation:** thread expansion walks *backward* from a bookmarked
 reply to reconstruct the thread up to that point, using the standard tweet
@@ -128,6 +130,18 @@ This is resumable: it only processes linked-content items that aren't yet
 after a crash or a rate limit picks up where it left off instead of
 redoing finished work. It uses Claude Haiku (cheap, fast) and reports how
 many summarization/tagging calls it made, since those are billed too.
+
+Work that can never succeed is given up on rather than retried forever. A
+link that fails (404, paywall, deleted video) is retried up to 3 times;
+after that it's left alone and counted in `linked_content_gave_up`. Tagging
+works the same way, via `bookmarks_tagging_gave_up`. Without those caps, one
+dead link would be re-fetched and re-billed on every future run. To force a
+retry after fixing whatever was wrong:
+
+```bash
+sqlite3 db/xbm.sqlite3 "UPDATE linked_content SET attempts = 0 WHERE status = 'failed'"
+sqlite3 db/xbm.sqlite3 "UPDATE bookmarks SET tag_attempts = 0"
+```
 
 ### 8. Use the web UI
 
@@ -156,16 +170,50 @@ app — it'll run sync + enrichment on that interval in the background. A
 failed scheduled run (rate limit, expired token, network blip) is logged
 and retried on the next interval; it never crashes the app.
 
+Only one sync or enrichment runs at a time. If a scheduled run is already
+in flight, **Sync now** (and `POST /api/sync`) returns **409 Conflict**
+instead of starting a second one, and a scheduled run that lands during a
+manual sync logs a line and waits for its next interval. This matters for
+more than tidiness: two concurrent runs meant two writers on one SQLite
+file, and two simultaneous OAuth token refreshes — X rotates refresh
+tokens, so the loser's token would be silently invalidated and you'd be
+logged out. `GET /api/jobs/status` reports what's running, if anything.
+
 ## Project layout
 
 ```
 backend/    FastAPI app, config, sync + enrichment logic, scheduler
 frontend/   Static single-page web UI, served by FastAPI
-db/         SQLite database file lives here (gitignored)
+db/         Schema + the SQLite database file (the .sqlite3 is gitignored)
 logs/       Rotating log file lives here (gitignored)
-scripts/    One-off / maintenance scripts
+scripts/    One-off / maintenance scripts, including DB init + migrations
+tests/      pytest suite
 run.py      Starts the whole app with one command
 ```
+
+## Database migrations
+
+`scripts/init_db.py` runs automatically on startup and is safe to re-run.
+It applies `db/schema.sql` (everything in it is `IF NOT EXISTS`) and then
+any outstanding migrations, tracked with SQLite's `user_version` pragma.
+
+Schema changes need a migration: `CREATE TABLE IF NOT EXISTS` does nothing
+on a database that already has the table, so a column added to
+`schema.sql` alone would never reach an existing install. Add the column to
+both `schema.sql` (for new installs) and a numbered migration in
+`scripts/init_db.py` (for existing ones). Migrations run *before*
+`schema.sql`, so statements in `schema.sql` may reference migrated columns.
+
+## Running the tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+The suite runs against a throwaway SQLite file built by the real
+`init_db.py`, and stubs the X and Anthropic APIs — it makes no network
+calls and costs nothing.
 
 ## Roadmap
 

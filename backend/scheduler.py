@@ -8,8 +8,9 @@ the thread — it just tries again on the next interval.
 import logging
 import threading
 
-from backend import config
+from backend import config, jobs
 from backend.enrich import run_enrichment
+from backend.jobs import JobBusyError
 from backend.sync import sync_bookmarks
 
 logger = logging.getLogger("xbm.scheduler")
@@ -22,9 +23,19 @@ def _run_loop(interval_minutes: float) -> None:
     logger.info("Scheduled sync enabled: running every %s minutes", interval_minutes)
     while not _stop_event.wait(interval_minutes * 60):
         try:
-            sync_summary = sync_bookmarks()
-            enrich_summary = run_enrichment()
+            # Hold the job lock across both steps so a manual "Sync now"
+            # cannot slip in between them. The lock is re-entrant, so the
+            # nested acquires inside sync_bookmarks/run_enrichment on this
+            # same thread pass straight through.
+            with jobs.exclusive("scheduled sync"):
+                sync_summary = sync_bookmarks()
+                enrich_summary = run_enrichment()
             logger.info("Scheduled sync complete: %s | %s", sync_summary, enrich_summary)
+        except JobBusyError:
+            logger.info(
+                "Skipping scheduled run: a manual sync or enrichment is already in progress. "
+                "Will try again on the next interval."
+            )
         except Exception:
             logger.exception("Scheduled sync run failed; will retry on the next interval")
 

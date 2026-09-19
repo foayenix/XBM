@@ -15,7 +15,12 @@ CREATE TABLE IF NOT EXISTS bookmarks (
     external_links  TEXT NOT NULL DEFAULT '[]',   -- JSON array, feeds Phase 4 enrichment
     is_thread       INTEGER NOT NULL DEFAULT 0,
     thread_text     TEXT,                          -- full expanded thread, if is_thread
-    synced_at       TEXT NOT NULL
+    synced_at       TEXT NOT NULL,
+    -- How many times auto-tagging has been attempted. Tagging selects
+    -- bookmarks that have no tags yet, so a bookmark Claude never returns
+    -- usable tags for would otherwise be re-sent (and re-billed) on every
+    -- single enrichment run. Capped by MAX_TAG_ATTEMPTS in backend/enrich.py.
+    tag_attempts    INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_bookmarks_created_at ON bookmarks(created_at);
@@ -44,11 +49,17 @@ CREATE TABLE IF NOT EXISTS linked_content (
     status                TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'done', 'failed')),
     error                 TEXT,
     fetched_at            TEXT,
+    -- How many times we have tried to fetch/summarize this link. Enrichment
+    -- reprocesses everything that is not 'done', so without a cap a
+    -- permanently dead link is re-fetched and re-summarized (at cost) on
+    -- every run, forever. Capped by MAX_LINK_ATTEMPTS in backend/enrich.py.
+    attempts              INTEGER NOT NULL DEFAULT 0,
     UNIQUE (bookmark_id, url)
 );
 
 CREATE INDEX IF NOT EXISTS idx_linked_content_bookmark_id ON linked_content(bookmark_id);
 CREATE INDEX IF NOT EXISTS idx_linked_content_status ON linked_content(status);
+CREATE INDEX IF NOT EXISTS idx_linked_content_retry ON linked_content(status, attempts);
 
 CREATE TABLE IF NOT EXISTS tags (
     id   INTEGER PRIMARY KEY AUTOINCREMENT,

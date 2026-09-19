@@ -234,11 +234,15 @@ function setupSyncButton() {
       statusEl.textContent = "Syncing bookmarks...";
       const syncRes = await fetch("/api/sync", { method: "POST" });
       const syncData = await syncRes.json();
+      // 409 means the background scheduler (or another tab) already has a
+      // run in flight - that is not an error worth alarming about.
+      if (syncRes.status === 409) throw new Error(syncData.detail || "A sync is already running.");
       if (!syncRes.ok) throw new Error(syncData.detail || "Sync failed");
 
       statusEl.textContent = "Enriching...";
       const enrichRes = await fetch("/api/enrich", { method: "POST" });
       const enrichData = await enrichRes.json();
+      if (enrichRes.status === 409) throw new Error(enrichData.detail || "An enrichment run is already in progress.");
       if (!enrichRes.ok) throw new Error(enrichData.detail || "Enrichment failed");
 
       statusEl.textContent =

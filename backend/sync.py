@@ -7,8 +7,9 @@ place via INSERT ... ON CONFLICT DO UPDATE.
 import json
 import logging
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
-from backend import db, x_auth
+from backend import db, jobs, x_auth
 from backend.x_client import XClient
 
 logger = logging.getLogger("xbm.sync")
@@ -27,22 +28,45 @@ def _extract_media_urls(tweet: dict, media_by_key: dict) -> list[str]:
     return urls
 
 
+# Hosts that are X itself (or its link shortener). Links to these are
+# in-platform references, not external content worth enriching.
+X_HOSTS = {"x.com", "twitter.com", "t.co"}
+
+
+def _is_x_url(url: str) -> bool:
+    """True if the URL points at X/Twitter itself, matched by hostname.
+
+    Matching on hostname rather than a substring matters: a naive
+    `"x.com" in url` check also swallows netflix.com, linux.com, phoenix.com
+    and every other domain that merely ends in "x.com", silently dropping
+    those bookmarks from enrichment and search with no error anywhere.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return False
+    host = (parsed.hostname or "").lower().rstrip(".")
+    return any(host == h or host.endswith("." + h) for h in X_HOSTS)
+
+
 def _extract_external_links(tweet: dict) -> list[str]:
     links = []
     for u in (tweet.get("entities") or {}).get("urls", []):
         expanded = u.get("expanded_url") or u.get("url")
-        if expanded and "twitter.com" not in expanded and "x.com" not in expanded:
-            links.append(expanded)
+        if not expanded:
+            continue
+        parsed = urlparse(expanded)
+        # Only http(s) - skip mailto:, javascript:, and other schemes we
+        # would never fetch anyway.
+        if parsed.scheme not in ("http", "https"):
+            continue
+        if _is_x_url(expanded):
+            continue
+        links.append(expanded)
     return links
 
 
-def _upsert_bookmark(conn, tweet: dict, author: dict, thread_chain: list[dict] | None,
-                      media_urls: list[str], external_links: list[str], synced_at: str) -> bool:
-    """Returns True if this was a new bookmark, False if it already existed."""
-    existing = conn.execute("SELECT id FROM bookmarks WHERE id = ?", (int(tweet["id"]),)).fetchone()
-
-    thread_text = "\n\n---\n\n".join(t["text"] for t in thread_chain) if thread_chain else None
-
+def _upsert_bookmark(conn, tweet: dict, author: dict, is_thread: int, thread_text: str | None,
+                     media_urls: list[str], external_links: list[str], synced_at: str) -> None:
     conn.execute(
         """
         INSERT INTO bookmarks
@@ -70,20 +94,25 @@ def _upsert_bookmark(conn, tweet: dict, author: dict, thread_chain: list[dict] |
             tweet["created_at"],
             json.dumps(media_urls),
             json.dumps(external_links),
-            int(bool(thread_chain)),
+            is_thread,
             thread_text,
             synced_at,
         ),
     )
-    return existing is None
 
 
 def sync_bookmarks() -> dict:
+    with jobs.exclusive("sync"):
+        return _sync_bookmarks()
+
+
+def _sync_bookmarks() -> dict:
     conn = db.get_connection()
     new_count = 0
     updated_count = 0
     bookmark_reads = 0
     thread_tweet_reads = 0
+    threads_reused = 0
 
     try:
         client = XClient()
@@ -109,22 +138,38 @@ def sync_bookmarks() -> dict:
 
             for tweet in tweets:
                 author = users_by_id.get(tweet["author_id"], {})
+                existing = conn.execute(
+                    "SELECT is_thread, thread_text FROM bookmarks WHERE id = ?", (int(tweet["id"]),)
+                ).fetchone()
 
-                thread_chain = None
-                refs = tweet.get("referenced_tweets") or []
-                if any(r["type"] == "replied_to" for r in refs):
-                    thread_chain = client.expand_thread(tweet)
-                    if thread_chain:
-                        thread_tweet_reads += len(thread_chain) - 1
+                if existing is None:
+                    # Only expand threads for bookmarks we have never seen. A
+                    # tweet's reply chain is immutable, so re-walking it on
+                    # every sync buys nothing and costs one billed X API read
+                    # per ancestor, per sync, forever.
+                    thread_chain = None
+                    refs = tweet.get("referenced_tweets") or []
+                    if any(r["type"] == "replied_to" for r in refs):
+                        thread_chain = client.expand_thread(tweet)
+                        if thread_chain:
+                            thread_tweet_reads += len(thread_chain) - 1
+                    is_thread = int(bool(thread_chain))
+                    thread_text = "\n\n---\n\n".join(t["text"] for t in thread_chain) if thread_chain else None
+                    new_count += 1
+                else:
+                    # Carry the stored thread forward so the upsert does not
+                    # clobber it with NULL.
+                    is_thread = existing["is_thread"]
+                    thread_text = existing["thread_text"]
+                    if is_thread:
+                        threads_reused += 1
+                    updated_count += 1
 
                 media_urls = _extract_media_urls(tweet, media_by_key)
                 external_links = _extract_external_links(tweet)
 
-                is_new = _upsert_bookmark(conn, tweet, author, thread_chain, media_urls, external_links, synced_at)
-                if is_new:
-                    new_count += 1
-                else:
-                    updated_count += 1
+                _upsert_bookmark(conn, tweet, author, is_thread, thread_text,
+                                 media_urls, external_links, synced_at)
 
             conn.commit()  # commit each page so a later failure doesn't lose earlier pages' progress
 
@@ -147,9 +192,11 @@ def sync_bookmarks() -> dict:
         "updated": updated_count,
         "bookmark_api_reads": bookmark_reads,
         "thread_expansion_api_reads": thread_tweet_reads,
+        "threads_reused_from_cache": threads_reused,
     }
     logger.info(
-        "Sync complete: %d new, %d updated, %d bookmark reads, %d thread-expansion reads",
-        new_count, updated_count, bookmark_reads, thread_tweet_reads,
+        "Sync complete: %d new, %d updated, %d bookmark reads, %d thread-expansion reads, "
+        "%d threads reused from cache",
+        new_count, updated_count, bookmark_reads, thread_tweet_reads, threads_reused,
     )
     return summary
