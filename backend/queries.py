@@ -37,18 +37,38 @@ def build_fts_query(q: str) -> str:
     return " ".join('"' + t.replace('"', '""') + '"' for t in tokens)
 
 
-def _thumbnail_for(conn, bookmark_id: int, media_urls: list[str]) -> str | None:
-    if media_urls:
-        return media_urls[0]
-    yt = conn.execute(
-        "SELECT url FROM linked_content WHERE bookmark_id = ? AND type = 'youtube' LIMIT 1",
-        (bookmark_id,),
-    ).fetchone()
-    if yt:
-        video_id = extract_youtube_video_id(yt["url"])
-        if video_id:
-            return f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
-    return None
+def _attach_thumbnails(conn, bookmarks: list[dict]) -> None:
+    """Fill in each bookmark's thumbnail, using one query for the whole page.
+
+    Attached media wins; otherwise fall back to the YouTube poster frame.
+    The linked_content lookup is batched rather than run per row.
+    """
+    if not bookmarks:
+        return
+
+    needs_lookup = [b["id"] for b in bookmarks if not b["_media_urls"]]
+    youtube_url_by_id: dict[int, str] = {}
+    if needs_lookup:
+        placeholders = ",".join("?" * len(needs_lookup))
+        rows = conn.execute(
+            f"""
+            SELECT bookmark_id, url FROM linked_content
+            WHERE type = 'youtube' AND bookmark_id IN ({placeholders})
+            ORDER BY id
+            """,
+            needs_lookup,
+        ).fetchall()
+        for r in rows:
+            youtube_url_by_id.setdefault(r["bookmark_id"], r["url"])
+
+    for b in bookmarks:
+        media_urls = b.pop("_media_urls")
+        if media_urls:
+            b["thumbnail"] = media_urls[0]
+            continue
+        url = youtube_url_by_id.get(b["id"])
+        video_id = extract_youtube_video_id(url) if url else None
+        b["thumbnail"] = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg" if video_id else None
 
 
 def _attach_tags(conn, bookmarks: list[dict]) -> None:
@@ -72,8 +92,8 @@ def _attach_tags(conn, bookmarks: list[dict]) -> None:
         b["tags"] = tags_by_bookmark.get(b["id"], [])
 
 
-def _row_to_result(conn, r) -> dict:
-    media_urls = json.loads(r["media_urls"] or "[]")
+def _row_to_result(r) -> dict:
+    """Shape one row. _media_urls is scratch, removed by _attach_thumbnails."""
     return {
         "id": r["id"],
         "author_username": r["author_username"],
@@ -82,7 +102,7 @@ def _row_to_result(conn, r) -> dict:
         "text": r["text"],
         "snippet": r["snippet_text"] if "snippet_text" in r.keys() else None,
         "is_thread": bool(r["is_thread"]),
-        "thumbnail": _thumbnail_for(conn, r["id"], media_urls),
+        "_media_urls": json.loads(r["media_urls"] or "[]"),
     }
 
 
@@ -140,9 +160,18 @@ def search_bookmarks(conn, q: str | None, tags: list[str], limit: int, offset: i
         count_sql = f"SELECT COUNT(*) c FROM bookmarks b WHERE 1=1 {tag_clause}"
         total = conn.execute(count_sql, tag_params).fetchone()["c"]
 
-    results = [_row_to_result(conn, r) for r in rows]
+    results = [_row_to_result(r) for r in rows]
+    _attach_thumbnails(conn, results)
     _attach_tags(conn, results)
-    return {"results": results, "total": total}
+    return {
+        "results": results,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        # Lets the UI decide whether to offer "Load more" without having to
+        # infer it from a short page.
+        "has_more": offset + len(results) < total,
+    }
 
 
 def list_tags(conn) -> list[dict]:
@@ -173,9 +202,10 @@ def list_watch_later(conn, status: str | None) -> list[dict]:
 
     results = []
     for r in rows:
-        result = _row_to_result(conn, r)
+        result = _row_to_result(r)
         result.update(watch_status=r["watch_status"], added_at=r["added_at"], watched_at=r["watched_at"])
         results.append(result)
+    _attach_thumbnails(conn, results)
     _attach_tags(conn, results)
     return results
 

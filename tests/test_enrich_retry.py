@@ -29,7 +29,7 @@ def always_failing_fetch(monkeypatch):
         calls.append(url)
         raise RuntimeError("404 Not Found")
 
-    monkeypatch.setattr(enrich.httpx, "get", boom)
+    monkeypatch.setattr(enrich, "fetch_article_html", boom)
     return calls
 
 
@@ -80,7 +80,7 @@ def test_attempt_is_recorded_before_the_work_so_a_crash_still_counts(conn, seed,
     def hard_crash(url, **kwargs):
         raise KeyboardInterrupt("simulated hard stop")
 
-    monkeypatch.setattr(enrich.httpx, "get", hard_crash)
+    monkeypatch.setattr(enrich, "fetch_article_html", hard_crash)
     with pytest.raises(KeyboardInterrupt):
         enrich.process_linked_content(conn)
 
@@ -92,14 +92,10 @@ def test_a_link_that_succeeds_is_never_retried(conn, seed, monkeypatch):
     add_link(conn, 1, "https://good.example/a")
 
     fetches = []
+    html = "<html><body><article>" + ("Real article body. " * 40) + "</article></body></html>"
 
-    class Resp:
-        text = "<html><body><article>" + ("Real article body. " * 40) + "</article></body></html>"
-
-        def raise_for_status(self):
-            pass
-
-    monkeypatch.setattr(enrich.httpx, "get", lambda url, **kw: fetches.append(url) or Resp())
+    monkeypatch.setattr(enrich, "fetch_article_html",
+                        lambda url, **kw: fetches.append(url) or (html, url))
     monkeypatch.setattr(enrich, "_claude_client", lambda: object())
     monkeypatch.setattr(enrich, "_summarize_article", lambda c, t, x: "a summary")
 

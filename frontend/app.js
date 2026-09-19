@@ -6,10 +6,14 @@
 const SNIPPET_START = "";
 const SNIPPET_END = "";
 
+const PAGE_SIZE = 30;
+
 const state = {
   q: "",
   tags: new Set(),
   wlStatus: "unwatched",
+  offset: 0,
+  loading: false,
 };
 
 function debounce(fn, ms) {
@@ -130,23 +134,62 @@ function buildCard(bookmark, opts = {}) {
 }
 
 function renderCards(container, items, opts = {}) {
-  container.textContent = "";
+  if (!opts.append) container.textContent = "";
   for (const b of items) {
     container.appendChild(buildCard(b, opts));
   }
 }
 
-async function runSearch() {
+// `append` distinguishes "Load more" (keep what is on screen and add the
+// next page) from a new search (start over at offset 0).
+async function runSearch({ append = false } = {}) {
+  if (state.loading) return;
+  state.loading = true;
+
+  const moreBtn = document.getElementById("load-more");
+  const statusEl = document.getElementById("results-status");
+
+  if (!append) state.offset = 0;
+
   const params = new URLSearchParams();
   if (state.q) params.set("q", state.q);
   for (const t of state.tags) params.append("tag", t);
+  params.set("limit", String(PAGE_SIZE));
+  params.set("offset", String(state.offset));
 
-  const res = await fetch("/api/search?" + params.toString());
-  const data = await res.json();
+  try {
+    const res = await fetch("/api/search?" + params.toString());
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Search failed");
 
-  renderCards(document.getElementById("results"), data.results);
-  const statusEl = document.getElementById("results-status");
-  statusEl.textContent = data.total === 1 ? "1 bookmark" : `${data.total} bookmarks`;
+    renderCards(document.getElementById("results"), data.results, { append });
+    state.offset += data.results.length;
+
+    const shown = state.offset;
+    const total = data.total;
+    statusEl.textContent =
+      total === 0
+        ? "No bookmarks"
+        : shown < total
+          ? `Showing ${shown} of ${total} bookmarks`
+          : total === 1
+            ? "1 bookmark"
+            : `${total} bookmarks`;
+
+    moreBtn.hidden = !data.has_more;
+    moreBtn.textContent = `Load ${Math.min(PAGE_SIZE, total - shown)} more`;
+  } catch (err) {
+    statusEl.textContent = "Error: " + err.message;
+    moreBtn.hidden = true;
+  } finally {
+    state.loading = false;
+  }
+}
+
+function setupLoadMore() {
+  document.getElementById("load-more").addEventListener("click", () => {
+    runSearch({ append: true });
+  });
 }
 
 async function loadTags() {
@@ -263,5 +306,6 @@ setupViewSwitching();
 setupWatchLaterFilters();
 setupSearchInput();
 setupSyncButton();
+setupLoadMore();
 loadTags();
 runSearch();

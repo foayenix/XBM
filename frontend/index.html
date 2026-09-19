@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>XBM - X Bookmarks</title>
+  <!-- Inline so the browser stops requesting /favicon.ico and logging a 404. -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%232563eb' d='M4 1h8a1 1 0 0 1 1 1v13l-5-3.5L3 15V2a1 1 0 0 1 1-1z'/></svg>" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -27,6 +29,7 @@
       <section id="search-view" class="view">
         <input id="search-input" type="search" placeholder="Search bookmarks..." autocomplete="off" />
         <div id="results" class="results"></div>
+        <button id="load-more" class="load-more" type="button" hidden>Load more</button>
         <p id="results-status" class="status-line"></p>
       </section>
 

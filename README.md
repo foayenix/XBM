@@ -29,6 +29,10 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+`requirements.txt` gives minimum versions. For a reproducible install of the
+exact versions this was last verified against, use
+`pip install -r requirements.lock` instead.
+
 ### 2. Get your X API credentials
 
 1. Go to the [X Developer Portal](https://developer.x.com/en/portal/dashboard)
@@ -81,6 +85,10 @@ python run.py
 ```
 
 Then open http://127.0.0.1:8000 in your browser.
+
+While working on the code, set `APP_RELOAD=1` in `.env` to restart the
+server on file changes. It's off by default because the reloader restarts
+the app — and the background scheduler with it — on every write.
 
 **Important:** the OAuth login flow redirects your browser back to
 `127.0.0.1`, so this only works when you run it directly on your own
@@ -143,12 +151,37 @@ sqlite3 db/xbm.sqlite3 "UPDATE linked_content SET attempts = 0 WHERE status = 'f
 sqlite3 db/xbm.sqlite3 "UPDATE bookmarks SET tag_attempts = 0"
 ```
 
+#### What gets fetched, and what doesn't
+
+The URLs enrichment downloads come from other people's tweets, so the
+fetch is guarded (`backend/fetching.py`):
+
+- **Only public destinations.** A link — or a redirect chain ending — at
+  `127.0.0.1`, a private LAN address, or a cloud metadata endpoint like
+  `169.254.169.254` is refused. Redirects are followed one hop at a time so
+  each destination is re-checked, rather than trusting the first one.
+- **Only articles.** A response that isn't HTML is refused instead of being
+  pushed through the HTML parser and summarized as prose, and URLs that
+  look like file downloads (`.pdf`, `.png`, `.zip`, …) are skipped before a
+  request is made.
+- **Bounded size.** Reading stops at 5 MB whether or not `Content-Length`
+  says so.
+
+YouTube links are matched by hostname, so `music.youtube.com`,
+`m.youtube.com` and `youtu.be` all take the transcript path and land in the
+watch-later queue.
+
+**Note:** bookmarks you remove on X are not deleted locally. Syncing only
+adds and updates, so the local database keeps acting as an archive. Delete
+rows by hand if you don't want that.
+
 ### 8. Use the web UI
 
 With the server running, http://127.0.0.1:8000 gives you:
 
 - A search bar over the full-text index (tweet text, thread text, linked
-  article summaries/transcripts, and tags)
+  article summaries/transcripts, and tags), 30 results at a time with a
+  **Load more** button and a running "showing X of Y" count
 - A tag sidebar — click a tag to filter, click again to clear it
 - A **Watch later** view listing every bookmark with a YouTube link
   (added automatically during enrichment), with unwatched/watched/all
@@ -204,6 +237,30 @@ both `schema.sql` (for new installs) and a numbered migration in
 `scripts/init_db.py` (for existing ones). Migrations run *before*
 `schema.sql`, so statements in `schema.sql` may reference migrated columns.
 
+## Security notes
+
+XBM has no login of its own, so anything that can reach the port can spend
+your X and Anthropic budget through `POST /api/sync`. Binding to
+`127.0.0.1` alone does not cover that, so two header checks run on every
+request (`backend/security.py`):
+
+- **Host** must be a name XBM answers to (`127.0.0.1`, `localhost`, `::1`
+  by default; ports are not part of this check). This blocks DNS
+  rebinding, where a page on `evil.com` whose DNS points at `127.0.0.1`
+  would otherwise become same-origin with this app.
+- **Origin**, on state-changing requests, must name the same host and port
+  as the request itself. This blocks cross-site requests from other pages
+  open in your browser. Requests with no `Origin` at all (curl, scripts)
+  are allowed — a browser cannot omit it on a cross-origin POST.
+
+Set `ALLOWED_HOSTS` in `.env` if you deliberately serve XBM under another
+name. Note that `localhost` and `127.0.0.1` are different origins, so pick
+one spelling and stay on it.
+
+Still worth knowing: your X tokens are stored in plain text in the SQLite
+file. It's gitignored and lives under `db/`, which is the bar this project
+sets for a local single-user tool — but it is not encryption at rest.
+
 ## Running the tests
 
 ```bash
@@ -214,6 +271,9 @@ pytest
 The suite runs against a throwaway SQLite file built by the real
 `init_db.py`, and stubs the X and Anthropic APIs — it makes no network
 calls and costs nothing.
+
+CI (`.github/workflows/ci.yml`) runs it on Python 3.11, 3.12 and 3.13, and
+separately against the pinned versions in `requirements.lock`.
 
 ## Roadmap
 

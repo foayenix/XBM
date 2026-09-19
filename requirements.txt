@@ -1,8 +1,13 @@
+# Floors are the versions whose APIs this code actually uses - not the
+# oldest release that happens to import. youtube-transcript-api in
+# particular moved from a static get_transcript() to the instance
+# .fetch() used in backend/enrich.py at 1.0, so an older resolution
+# would fail at runtime rather than at install time.
 fastapi>=0.111
 uvicorn[standard]>=0.30
 httpx>=0.27
 python-dotenv>=1.0
-anthropic>=0.34
-youtube-transcript-api>=0.6
+anthropic>=0.40
+youtube-transcript-api>=1.0
 readability-lxml>=0.8
 lxml[html_clean]>=5.2

@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend import config, db, jobs, queries, scheduler, x_auth
+from backend import config, db, jobs, queries, scheduler, security, x_auth
 from backend.enrich import EnrichmentError, run_enrichment
 from backend.jobs import JobBusyError
 from backend.sync import sync_bookmarks
@@ -38,6 +38,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="XBM - X Bookmarks Watch/Read Later", lifespan=lifespan)
+
+# Registered before anything else so every route, including the static
+# mount, is covered.
+app.middleware("http")(security.guard_requests)
 
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 

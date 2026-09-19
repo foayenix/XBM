@@ -19,7 +19,13 @@ from readability import Document
 from youtube_transcript_api import YouTubeTranscriptApi
 
 from backend import config, db, jobs
-from backend.util import extract_youtube_video_id
+from backend.fetching import (
+    HTTP_HEADERS,
+    UnsupportedContentError,
+    fetch_article_html,
+    looks_like_a_file_download,
+)
+from backend.util import extract_youtube_video_id, is_youtube_url
 
 logger = logging.getLogger("xbm.enrich")
 
@@ -27,7 +33,6 @@ logger = logging.getLogger("xbm.enrich")
 # per bookmark, so cost adds up across a large bookmark backlog.
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 
-HTTP_HEADERS = {"User-Agent": "XBM/0.1 (personal bookmarks tool; not for redistribution)"}
 ARTICLE_TEXT_LIMIT = 12000  # chars sent to Claude for summarization
 TRANSCRIPT_CHAR_LIMIT = 20000  # cap stored transcript length
 
@@ -53,12 +58,25 @@ def _claude_client() -> Anthropic:
 
 
 def classify_link(url: str) -> str | None:
-    host = (urlparse(url).hostname or "").lower()
-    if host in ("youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"):
-        return "youtube"
-    if host:
-        return "article"
-    return None
+    """Decide how to enrich a link, or None to leave it alone entirely.
+
+    Host matching is by hostname, so music.youtube.com and m.youtube.com are
+    recognised as YouTube (they were previously treated as articles, missing
+    the transcript and the watch-later queue) while notyoutube.com is not.
+
+    Anything that looks like a file download is skipped rather than
+    classified as an article: a PDF or an image used to be fetched in full,
+    pushed through the HTML parser, and summarized by Claude as if it were
+    prose.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return None
+    if is_youtube_url(url):
+        return "youtube" if extract_youtube_video_id(url) else None
+    if looks_like_a_file_download(url):
+        return None
+    return "article"
 
 
 def seed_linked_content(conn) -> int:
@@ -168,9 +186,8 @@ def process_linked_content(conn) -> dict:
                     (row["bookmark_id"], now),
                 )
             else:  # article
-                resp = httpx.get(row["url"], headers=HTTP_HEADERS, timeout=20.0, follow_redirects=True)
-                resp.raise_for_status()
-                text, title = _extract_article_text(resp.text)
+                html, _final_url = fetch_article_html(row["url"])
+                text, title = _extract_article_text(html)
                 if client is None:
                     client = _claude_client()
                 summary = _summarize_article(client, title, text)
@@ -180,6 +197,19 @@ def process_linked_content(conn) -> dict:
                     (summary, title, now, row["id"]),
                 )
             done += 1
+        except UnsupportedContentError as e:
+            # Not a transient failure: this URL will never be an article, so
+            # burn the remaining attempts now instead of refetching it twice
+            # more on later runs.
+            logger.info("Skipping linked_content id=%s url=%s: %s", row["id"], row["url"], e)
+            conn.execute(
+                "UPDATE linked_content SET status='failed', error=?, fetched_at=?, attempts=? WHERE id=?",
+                (str(e)[:500], now, MAX_LINK_ATTEMPTS, row["id"]),
+            )
+            failed += 1
+            gave_up += 1
+            conn.commit()
+            continue
         except Exception as e:
             exhausted = attempts >= MAX_LINK_ATTEMPTS
             logger.warning(

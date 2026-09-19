@@ -298,3 +298,21 @@ main {
   color: var(--text-muted);
   font-size: 0.85rem;
 }
+
+.load-more {
+  display: block;
+  margin: 1.5rem auto 0;
+  padding: 0.55rem 1.4rem;
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.load-more:hover {
+  background: var(--card-hover);
+}
+
+.load-more[hidden] {
+  display: none;
+}

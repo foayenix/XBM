@@ -44,7 +44,9 @@ def client(db_path):
     # redirected at tmp_path when backend.main configures its file logger.
     from backend.main import app
 
-    with TestClient(app, raise_server_exceptions=False) as c:
+    # base_url matters: backend/security.py pins the Host header, so the
+    # default "testserver" host would be rejected with 403.
+    with TestClient(app, base_url="http://127.0.0.1:8000", raise_server_exceptions=False) as c:
         yield c
 
 
