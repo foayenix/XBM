@@ -72,6 +72,13 @@ CREATE TABLE IF NOT EXISTS watch_later (
 
 CREATE INDEX IF NOT EXISTS idx_watch_later_status ON watch_later(status);
 
+-- Triage state for the web UI's Inbox. A bookmark with a row here has been
+-- "filed" (read and dealt with); no row means it's still in the Inbox.
+CREATE TABLE IF NOT EXISTS bookmark_reads (
+    bookmark_id INTEGER PRIMARY KEY REFERENCES bookmarks(id) ON DELETE CASCADE,
+    read_at     TEXT NOT NULL
+);
+
 -- Full-text search over bookmark text + linked content summaries + tags.
 -- Not an "external content" FTS5 table on purpose: source data lives across
 -- three tables (bookmarks, linked_content, tags), so a plain FTS5 table kept

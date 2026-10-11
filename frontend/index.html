@@ -3,44 +3,158 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>XBM - X Bookmarks</title>
+  <meta name="color-scheme" content="light dark" />
+  <title>XBM</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <h1>XBM</h1>
-    <div class="topbar-actions">
-      <span id="sync-status" class="sync-status"></span>
-      <button id="sync-btn">Sync now</button>
-    </div>
-  </header>
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-inbox" viewBox="0 0 20 20"><path d="M2.5 11.5h4.25l1.5 2.5h3.5l1.5-2.5h4.25"/><path d="M5 4h10l2.5 7.5V16h-15v-4.5z"/></symbol>
+      <symbol id="i-all" viewBox="0 0 20 20"><rect x="2.5" y="7.5" width="15" height="9.5" rx="1.5"/><path d="M4.5 5h11M6.5 2.5h7"/></symbol>
+      <symbol id="i-thread" viewBox="0 0 20 20"><circle cx="5" cy="4.5" r="2"/><circle cx="5" cy="15.5" r="2"/><path d="M5 6.5v7M9.5 4.5h8M9.5 10h8M9.5 15.5h5.5"/></symbol>
+      <symbol id="i-article" viewBox="0 0 20 20"><path d="M4.5 2.5h7.5l3.5 3.5v11.5h-11z"/><path d="M12 2.5V6h3.5M7.5 10h5M7.5 13h5"/></symbol>
+      <symbol id="i-video" viewBox="0 0 20 20"><rect x="2.5" y="4.5" width="15" height="11" rx="2"/><path d="M8.5 7.6v4.8l4-2.4z"/></symbol>
+      <symbol id="i-watch" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.5"/><path d="M10 5.75V10l2.75 2"/></symbol>
+      <symbol id="i-search" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m12.5 12.5 5 5"/></symbol>
+      <symbol id="i-sync" viewBox="0 0 20 20"><path d="M16.5 9A6.5 6.5 0 0 0 4.6 5.7M3.5 11a6.5 6.5 0 0 0 11.9 3.3"/><path d="M4.25 2.5v3.5h3.5M15.75 17.5V14h-3.5"/></symbol>
+      <symbol id="i-external" viewBox="0 0 20 20"><path d="M11 3.5h5.5V9M16.5 3.5l-7 7"/><path d="M14 12v4.5H3.5V6H8"/></symbol>
+      <symbol id="i-file" viewBox="0 0 20 20"><path d="M2.5 3.5h15v3.25h-15z"/><path d="M3.75 6.75h12.5v9.75H3.75zM8 10.25h4"/></symbol>
+      <symbol id="i-check" viewBox="0 0 20 20"><path d="m4 10.5 4 4 8-9"/></symbol>
+      <symbol id="i-x" viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 20 20"><path d="M3 5.5h14M3 10h14M3 14.5h14"/></symbol>
+      <symbol id="i-back" viewBox="0 0 20 20"><path d="M12.5 4 6.5 10l6 6"/></symbol>
+      <symbol id="i-tag" viewBox="0 0 20 20"><path d="M3 3h6.5l8 8-6.5 6.5-8-8z"/><circle cx="6.75" cy="6.75" r="1.25"/></symbol>
+      <symbol id="i-link" viewBox="0 0 20 20"><path d="M8.5 11.5a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5l-1 1"/><path d="M11.5 8.5a3.5 3.5 0 0 0-5 0L4 11a3.5 3.5 0 0 0 5 5l1-1"/></symbol>
+      <symbol id="i-person" viewBox="0 0 20 20"><circle cx="10" cy="6.5" r="3.25"/><path d="M3.5 17a6.5 6.5 0 0 1 13 0"/></symbol>
+    </defs>
+  </svg>
 
-  <div class="layout">
-    <nav class="sidebar">
-      <button class="nav-item active" data-view="search" type="button">All bookmarks</button>
-      <button class="nav-item" data-view="watch-later" type="button">Watch later</button>
-      <h2>Tags</h2>
-      <ul id="tag-list" class="tag-list"></ul>
+  <div class="app" id="app">
+    <nav class="rail" id="rail" aria-label="Library">
+      <div class="rail-head">
+        <span class="wordmark">XBM</span>
+        <button class="icon-btn rail-close" id="rail-close" type="button" aria-label="Close navigation">
+          <svg class="icon"><use href="#i-x"/></svg>
+        </button>
+      </div>
+
+      <ul class="views" id="views">
+        <li><button class="view-item" type="button" data-view="inbox"><svg class="icon"><use href="#i-inbox"/></svg><span>Inbox</span><span class="count" data-count="inbox"></span></button></li>
+        <li><button class="view-item" type="button" data-view="all"><svg class="icon"><use href="#i-all"/></svg><span>All bookmarks</span><span class="count" data-count="all"></span></button></li>
+        <li><button class="view-item" type="button" data-view="threads"><svg class="icon"><use href="#i-thread"/></svg><span>Threads</span><span class="count" data-count="threads"></span></button></li>
+        <li><button class="view-item" type="button" data-view="articles"><svg class="icon"><use href="#i-article"/></svg><span>Articles</span><span class="count" data-count="articles"></span></button></li>
+        <li><button class="view-item" type="button" data-view="videos"><svg class="icon"><use href="#i-video"/></svg><span>Videos</span><span class="count" data-count="videos"></span></button></li>
+        <li><button class="view-item" type="button" data-view="watch"><svg class="icon"><use href="#i-watch"/></svg><span>Watch later</span><span class="count" data-count="watch"></span></button></li>
+      </ul>
+
+      <section class="index" aria-labelledby="index-title">
+        <h2 id="index-title">Filed under</h2>
+        <p class="index-hint" id="index-hint"></p>
+        <ul class="tag-index" id="tag-index"></ul>
+      </section>
+
+      <div class="rail-foot">
+        <button class="rail-link" id="help-btn" type="button">Keyboard shortcuts <kbd>?</kbd></button>
+      </div>
     </nav>
+    <div class="scrim" id="scrim" hidden></div>
 
-    <main>
-      <section id="search-view" class="view">
-        <input id="search-input" type="search" placeholder="Search bookmarks..." autocomplete="off" />
-        <div id="results" class="results"></div>
-        <p id="results-status" class="status-line"></p>
-      </section>
+    <header class="topbar">
+      <button class="icon-btn menu-btn" id="menu-btn" type="button" aria-label="Open navigation" aria-controls="rail">
+        <svg class="icon"><use href="#i-menu"/></svg>
+      </button>
+      <label class="search">
+        <svg class="icon"><use href="#i-search"/></svg>
+        <span class="visually-hidden">Search bookmarks</span>
+        <input id="search-input" type="search" placeholder="Search tweets, threads, summaries, transcripts" autocomplete="off" spellcheck="false" />
+        <kbd class="search-key">/</kbd>
+      </label>
+      <div class="topbar-actions">
+        <span class="sync-status" id="sync-status" role="status" aria-live="polite"></span>
+        <button class="btn" id="palette-btn" type="button" aria-label="Open command palette">
+          <kbd id="palette-key">Ctrl K</kbd>
+        </button>
+        <button class="btn btn-primary" id="sync-btn" type="button">
+          <svg class="icon"><use href="#i-sync"/></svg><span>Sync now</span>
+        </button>
+      </div>
+    </header>
 
-      <section id="watch-later-view" class="view" hidden>
-        <div class="wl-filters">
-          <button class="wl-filter active" data-status="unwatched" type="button">Unwatched</button>
-          <button class="wl-filter" data-status="watched" type="button">Watched</button>
-          <button class="wl-filter" data-status="" type="button">All</button>
+    <section class="list-pane" aria-labelledby="list-title">
+      <div class="list-head">
+        <div class="list-title-row">
+          <h1 id="list-title">Inbox</h1>
+          <span class="list-count" id="list-count"></span>
         </div>
-        <div id="watch-later-results" class="results"></div>
-        <p id="watch-later-status" class="status-line"></p>
-      </section>
-    </main>
+        <div class="segmented" id="watch-filter" role="group" aria-label="Watch status" hidden>
+          <button type="button" data-watch="unwatched" aria-pressed="true">Unwatched</button>
+          <button type="button" data-watch="watched" aria-pressed="false">Watched</button>
+          <button type="button" data-watch="" aria-pressed="false">All</button>
+        </div>
+        <div class="active-filters" id="active-filters"></div>
+      </div>
+      <ol class="list" id="list" role="listbox" aria-labelledby="list-title" tabindex="0"></ol>
+      <div class="empty" id="list-empty" hidden></div>
+      <div class="sentinel" id="sentinel" aria-hidden="true"></div>
+    </section>
+
+    <article class="reader" id="reader" aria-label="Selected bookmark"></article>
   </div>
+
+  <dialog class="palette" id="palette" aria-label="Command palette">
+    <div class="palette-input">
+      <svg class="icon"><use href="#i-search"/></svg>
+      <input id="palette-input" type="text" placeholder="Jump to a view, filter by a tag, or run a command" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="palette-list" />
+    </div>
+    <ul class="palette-list" id="palette-list" role="listbox"></ul>
+    <p class="palette-foot"><kbd>↑</kbd><kbd>↓</kbd> move <kbd>Enter</kbd> run <kbd>Esc</kbd> close</p>
+  </dialog>
+
+  <dialog class="help" id="help" aria-labelledby="help-title">
+    <div class="help-head">
+      <h2 id="help-title">Keyboard shortcuts</h2>
+      <button class="icon-btn" type="button" data-close aria-label="Close">
+        <svg class="icon"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <div class="help-grid">
+      <section>
+        <h3>Move</h3>
+        <dl>
+          <dt><kbd>j</kbd> <kbd>k</kbd></dt><dd>Next / previous bookmark</dd>
+          <dt><kbd>Enter</kbd></dt><dd>Open in reading pane</dd>
+          <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Step through See also, <kbd>Enter</kbd> opens</dd>
+          <dt><kbd>/</kbd></dt><dd>Search</dd>
+          <dt><kbd>Esc</kbd></dt><dd>Clear search, then tag filters</dd>
+        </dl>
+      </section>
+      <section>
+        <h3>Act</h3>
+        <dl>
+          <dt><kbd>e</kbd></dt><dd>File it (out of Inbox), or send back</dd>
+          <dt><kbd>z</kbd></dt><dd>Undo last filing</dd>
+          <dt><kbd>w</kbd></dt><dd>Toggle watched</dd>
+          <dt><kbd>o</kbd></dt><dd>Open on X</dd>
+          <dt><kbd>t</kbd></dt><dd>Filter by tag</dd>
+        </dl>
+      </section>
+      <section>
+        <h3>Go to</h3>
+        <dl>
+          <dt><kbd>g</kbd> <kbd>i</kbd></dt><dd>Inbox</dd>
+          <dt><kbd>g</kbd> <kbd>a</kbd></dt><dd>All bookmarks</dd>
+          <dt><kbd>g</kbd> <kbd>t</kbd></dt><dd>Threads</dd>
+          <dt><kbd>g</kbd> <kbd>r</kbd></dt><dd>Articles</dd>
+          <dt><kbd>g</kbd> <kbd>v</kbd></dt><dd>Videos</dd>
+          <dt><kbd>g</kbd> <kbd>w</kbd></dt><dd>Watch later</dd>
+          <dt><kbd class="mod-key">Ctrl</kbd> <kbd>K</kbd></dt><dd>Command palette</dd>
+        </dl>
+      </section>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="/static/app.js"></script>
 </body>

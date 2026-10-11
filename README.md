@@ -131,16 +131,32 @@ many summarization/tagging calls it made, since those are billed too.
 
 ### 8. Use the web UI
 
-With the server running, http://127.0.0.1:8000 gives you:
+With the server running, http://127.0.0.1:8000 opens a three-pane reader
+built for working through a backlog from the keyboard:
 
-- A search bar over the full-text index (tweet text, thread text, linked
-  article summaries/transcripts, and tags)
-- A tag sidebar — click a tag to filter, click again to clear it
-- A **Watch later** view listing every bookmark with a YouTube link
-  (added automatically during enrichment), with unwatched/watched/all
-  filters and a toggle per item
-- A **Sync now** button that runs a full sync followed by enrichment and
-  reports progress and final counts
+- **Inbox and views.** Every new bookmark lands in the Inbox. File it
+  (`e`) once you've dealt with it, and undo with `z`. The rail also has
+  All bookmarks, Threads, Articles, Videos and Watch later, each with a
+  live count.
+- **Reading pane.** The selected bookmark opens alongside the list with
+  everything enrichment found: the full thread, the linked article's
+  summary or the video's transcript, its tags, and any enrichment errors.
+- **See also.** Under each bookmark, other bookmarks that share its tags
+  (or its author), with the shared tags shown, so you can follow a topic
+  across everything you've saved.
+- **Search.** Matches the start of every word you type across tweets,
+  threads, summaries, transcripts and tags. When the match is in an
+  attached summary rather than the tweet, the row shows that passage.
+- **Tag index.** "Filed under" in the rail narrows to the tags inside
+  your current results, with counts, so clicking a tag always refines.
+- **Command palette** (`Ctrl K` / `⌘K`): jump to a view, filter by any
+  tag, or sync. Press `?` for every shortcut.
+- **Sync now** runs a full sync followed by enrichment and reports what
+  changed.
+
+The current view, search, tag filters and selected bookmark live in the
+URL, so a reload or a bookmark of the page brings you back to the same
+place. Light and dark follow your system setting.
 
 ### 9. Logs and unattended scheduled sync
 

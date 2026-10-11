@@ -94,10 +94,61 @@ def api_enrich():
 
 
 @app.get("/api/search")
-def api_search(q: str | None = None, tag: list[str] = Query(default=[]), limit: int = 30, offset: int = 0):
+def api_search(
+    q: str | None = None,
+    tag: list[str] = Query(default=[]),
+    view: str = "all",
+    watch: str | None = None,
+    limit: int = Query(default=30, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    if view not in queries.VIEWS:
+        raise HTTPException(status_code=400, detail=f"Unknown view '{view}'")
     conn = db.get_connection()
     try:
-        return queries.search_bookmarks(conn, q, tag, limit, offset)
+        return queries.search_bookmarks(conn, q, tag, limit, offset, view, watch)
+    finally:
+        conn.close()
+
+
+@app.get("/api/views")
+def api_views():
+    conn = db.get_connection()
+    try:
+        return queries.view_counts(conn)
+    finally:
+        conn.close()
+
+
+@app.get("/api/bookmarks/{bookmark_id}")
+def api_bookmark(bookmark_id: int):
+    conn = db.get_connection()
+    try:
+        result = queries.get_bookmark(conn, bookmark_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail="No bookmark with that id")
+        return result
+    finally:
+        conn.close()
+
+
+@app.post("/api/bookmarks/{bookmark_id}/read")
+def api_mark_read(bookmark_id: int):
+    return _set_read(bookmark_id, True)
+
+
+@app.delete("/api/bookmarks/{bookmark_id}/read")
+def api_mark_unread(bookmark_id: int):
+    return _set_read(bookmark_id, False)
+
+
+def _set_read(bookmark_id: int, read: bool):
+    conn = db.get_connection()
+    try:
+        result = queries.set_read(conn, bookmark_id, read)
+        if result is None:
+            raise HTTPException(status_code=404, detail="No bookmark with that id")
+        return result
     finally:
         conn.close()
 
